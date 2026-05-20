@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   const res = await ai.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1000,
     system: buildSystemPrompt((brain ?? {}) as Record<string, unknown>),
     messages: [

@@ -77,7 +77,7 @@ export async function generateWeeklyIdeas(
   weekContext: string
 ): Promise<GeneratedIdeas> {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     system: buildSystemPrompt({ ...brandBrain, performance_learning: { ...((brandBrain.performance_learning as Record<string, unknown>) ?? {}), recent_ideas: recentIdeas } }),
     messages: [
@@ -112,7 +112,7 @@ export async function generateCopyOptions(
   idea: Record<string, unknown>
 ): Promise<{ copy: string; hashtags: string[]; cta: string }[]> {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1500,
     system: buildSystemPrompt(brandBrain),
     messages: [
@@ -147,7 +147,7 @@ export async function generateBriefs(
   const photo = (visual.photo_style as Record<string, unknown>) ?? {}
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     system: buildSystemPrompt(brandBrain),
     messages: [
@@ -209,7 +209,7 @@ export async function generateReviewResponse(
   const reviewTone = (ops.booking as Record<string, string>)?.booking_cta ?? 'cercano y profesional'
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 600,
     system: buildSystemPrompt(brandBrain),
     messages: [

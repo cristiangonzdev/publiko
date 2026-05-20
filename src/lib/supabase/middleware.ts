@@ -36,7 +36,11 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth')
-  const isPublic = pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/api/webhooks')
+  const isApiRoute = pathname.startsWith('/api/')
+  const isPublic = pathname === '/' || pathname.startsWith('/_next')
+
+  // API routes handle their own auth — don't redirect, just refresh session
+  if (isApiRoute) return response
 
   if (!user && !isAuthRoute && !isPublic) {
     const url = request.nextUrl.clone()

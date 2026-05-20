@@ -28,11 +28,17 @@ export async function POST(request: NextRequest) {
 
   const weekContext = `Semana del ${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`
 
-  const generated = await generateWeeklyIdeas(
-    brain as unknown as Record<string, unknown>,
-    (recentIdeas ?? []) as unknown as Array<Record<string, unknown>>,
-    weekContext
-  )
+  let generated
+  try {
+    generated = await generateWeeklyIdeas(
+      brain as unknown as Record<string, unknown>,
+      (recentIdeas ?? []) as unknown as Array<Record<string, unknown>>,
+      weekContext
+    )
+  } catch (err) {
+    console.error('Claude error:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+  }
 
   const allIdeas = [
     ...generated.system_ideas.map((idea) => ({
