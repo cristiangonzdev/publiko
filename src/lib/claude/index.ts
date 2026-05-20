@@ -134,6 +134,72 @@ Responde SOLO en JSON: [{"copy":"","hashtags":[],"cta":""}]`,
   return JSON.parse(text)
 }
 
+export async function generateBriefs(
+  brandBrain: Record<string, unknown>,
+  idea: Record<string, unknown>
+): Promise<{
+  recording_brief: Record<string, unknown>
+  editing_brief: Record<string, unknown>
+}> {
+  const visual = (brandBrain.visual_identity as Record<string, unknown>) ?? {}
+  const onCamera = (visual.on_camera as Record<string, unknown>) ?? {}
+  const music = (visual.music_style as Record<string, unknown>) ?? {}
+  const photo = (visual.photo_style as Record<string, unknown>) ?? {}
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    system: buildSystemPrompt(brandBrain),
+    messages: [
+      {
+        role: 'user',
+        content: `Genera los briefs de grabación y edición para esta tarea de contenido.
+
+IDEA:
+Concepto: ${idea.concept}
+Descripción: ${idea.full_description}
+Tipo: ${idea.content_type}
+Ángulo: ${idea.angle}
+
+CONTEXTO VISUAL:
+Puede salir en cámara: ${onCamera.owner_willing ? 'Sí (dueño)' : 'No'}${onCamera.staff_willing ? ', equipo' : ''}
+Estilo música: ${((music.preferred as string[]) ?? []).join(', ') || 'sin preferencia'} (energía: ${music.energy ?? 'moderate'})
+Estilo foto: ${photo.mood ?? ''}
+
+Genera un JSON con:
+{
+  "recording_brief": {
+    "concept": "descripción del concepto visual en 1 frase",
+    "objective": "objetivo comunicativo del vídeo",
+    "planes": ["plano 1", "plano 2", ...],
+    "duracion_estimada": "X-Y segundos de material bruto",
+    "preparacion": ["elemento 1", "elemento 2", ...],
+    "musica_referencia": "estilo o canción de referencia",
+    "referencia_visual": "descripción de referencia visual o cuenta IG",
+    "notas_tecnicas": "instrucciones técnicas de grabación"
+  },
+  "editing_brief": {
+    "duracion_final": "X-Y segundos",
+    "ritmo": "descripción del ritmo de edición",
+    "transiciones": "tipo de transiciones",
+    "texto_pantalla": "texto en pantalla si aplica o null",
+    "tipografia": "estilo tipográfico o null",
+    "musica_exacta": "pista o descripción exacta",
+    "color_grade": "instrucciones de color",
+    "formato_exportacion": "specs técnicas de exportación",
+    "notas_especiales": "cualquier nota adicional"
+  }
+}
+
+Responde SOLO en JSON válido.`,
+      },
+    ],
+  })
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  return JSON.parse(text)
+}
+
 export async function generateReviewResponse(
   brandBrain: Record<string, unknown>,
   review: { author_name: string; rating: number; text: string }

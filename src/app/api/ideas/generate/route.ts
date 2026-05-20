@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateWeeklyIdeas } from '@/lib/claude'
+import { notifyAdmin } from '@/lib/telegram'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -54,6 +55,12 @@ export async function POST(request: NextRequest) {
     .select('id, concept, content_type, angle, content_origin, status')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const service = await createServiceClient()
+  const { data: client } = await service.from('clients').select('business_name').eq('id', client_id).single()
+  await notifyAdmin(
+    `📋 <b>Plan semanal listo</b>\n\n${client?.business_name ?? client_id}\n${inserted?.length ?? 0} ideas generadas`,
+  )
 
   return NextResponse.json({ ideas: inserted, count: inserted?.length ?? 0 })
 }
