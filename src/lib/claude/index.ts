@@ -2,6 +2,10 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic()
 
+function stripMarkdown(text: string): string {
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+}
+
 export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
   const id = (brandBrain.identity as Record<string, string>) ?? {}
   const audience = (brandBrain.audience as Record<string, unknown>) ?? {}
@@ -103,7 +107,7 @@ Responde SOLO en JSON válido, sin markdown ni explicaciones extra:
     ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+    const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
   return JSON.parse(text) as GeneratedIdeas
 }
 
@@ -130,7 +134,7 @@ Responde SOLO en JSON: [{"copy":"","hashtags":[],"cta":""}]`,
     ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '[]'
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
   return JSON.parse(text)
 }
 
@@ -196,7 +200,7 @@ Responde SOLO en JSON válido.`,
     ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
   return JSON.parse(text)
 }
 
@@ -226,6 +230,6 @@ Genera 2 opciones de respuesta cortas y naturales. JSON: ["respuesta1","respuest
     ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '[]'
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
   return JSON.parse(text)
 }

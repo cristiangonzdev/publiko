@@ -53,7 +53,8 @@ Responde SOLO en JSON:
     ],
   })
 
-  const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
+  const raw = res.content[0].type === 'text' ? res.content[0].text : '{}'
+  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
   const generated = JSON.parse(text) as {
     concept: string; full_description: string; angle: string; content_pillar: string
   }
