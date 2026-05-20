@@ -91,18 +91,18 @@ export async function generateWeeklyIdeas(
 
 GENERA:
 5 ideas SISTEMA (content_origin: "system"):
-  - Varía los tipos: mezcla product_hero, social_proof, educational, behind_scenes
   - Para cada idea: concept (1 línea) + full_description + content_type + angle + content_pillar
 
 2 ideas HUMANO (content_origin: "human"):
-  - Sugiere el ÁNGULO Y FORMATO, no el contenido
-  - El humano aportará la historia real
+  - Sugiere el ángulo y formato, no el contenido. El humano aportará la historia real.
 
-Responde SOLO en JSON válido, sin markdown ni explicaciones extra:
-{
-  "system_ideas": [{"concept":"","full_description":"","content_type":"reel|post|story|carrusel","angle":"","content_pillar":"","content_origin":"system"}],
-  "human_ideas": [{"concept":"","full_description":"","content_type":"reel|post|story|carrusel","angle":"","content_origin":"human","human_input":""}]
-}`,
+VALORES EXACTOS PERMITIDOS (usa SOLO estos, sin modificar):
+- content_type: "reel" | "post" | "story" | "carrusel"
+- angle: "emocional" | "informativo" | "humor" | "social_proof" | "educativo" | "aspiracional" | "detras_escenas" | "anuncio" | "opinion" | "historia"
+- content_origin: "system" | "human"
+
+Responde SOLO con JSON válido, sin markdown, sin texto extra:
+{"system_ideas":[{"concept":"","full_description":"","content_type":"reel","angle":"emocional","content_pillar":"","content_origin":"system"}],"human_ideas":[{"concept":"","full_description":"","content_type":"reel","angle":"historia","content_origin":"human","human_input":""}]}`,
       },
     ],
   })

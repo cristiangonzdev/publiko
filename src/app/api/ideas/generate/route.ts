@@ -40,15 +40,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
 
+  const VALID_ANGLES = ['emocional','informativo','humor','social_proof','educativo','aspiracional','detras_escenas','anuncio','opinion','historia']
+  const VALID_TYPES = ['reel','post','story','carrusel','gmb_post']
+
+  const sanitize = (idea: Record<string, unknown>) => ({
+    ...idea,
+    angle: VALID_ANGLES.includes(idea.angle as string) ? idea.angle : 'emocional',
+    content_type: VALID_TYPES.includes(idea.content_type as string) ? idea.content_type : 'reel',
+    content_origin: idea.content_origin === 'human' ? 'human' : 'system',
+  })
+
   const allIdeas = [
     ...generated.system_ideas.map((idea) => ({
-      ...idea,
+      ...sanitize(idea as unknown as Record<string, unknown>),
       client_id,
       status: 'suggested',
       can_recycle_after: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
     })),
     ...generated.human_ideas.map((idea) => ({
-      ...idea,
+      ...sanitize(idea as unknown as Record<string, unknown>),
       client_id,
       status: 'suggested',
     })),

@@ -59,6 +59,9 @@ Responde SOLO en JSON:
     concept: string; full_description: string; angle: string; content_pillar: string
   }
 
+  const VALID_ANGLES = ['emocional','informativo','humor','social_proof','educativo','aspiracional','detras_escenas','anuncio','opinion','historia']
+  const safeAngle = VALID_ANGLES.includes(generated.angle) ? generated.angle : 'emocional'
+
   const { data: idea } = await service
     .from('content_ideas')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,7 +71,7 @@ Responde SOLO en JSON:
       full_description: generated.full_description,
       content_type,
       content_origin: 'human',
-      angle: generated.angle as any,
+      angle: safeAngle as any,
       content_pillar: generated.content_pillar,
       human_input,
       status: 'suggested',
