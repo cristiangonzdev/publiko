@@ -23,10 +23,83 @@ const ORIGIN_BADGE: Record<string, string> = {
   human: 'Humano',
 }
 
+interface RecordingBrief {
+  concept?: string
+  objective?: string
+  planes?: string[]
+  duracion_estimada?: string
+  preparacion?: string[]
+  musica_referencia?: string
+  referencia_visual?: string
+  notas_tecnicas?: string
+}
+
+interface EditingBrief {
+  duracion_final?: string
+  ritmo?: string
+  transiciones?: string
+  texto_pantalla?: string | null
+  tipografia?: string | null
+  musica_exacta?: string
+  color_grade?: string
+  formato_exportacion?: string
+  notas_especiales?: string
+}
+
+interface CopyOption {
+  copy?: string
+  hashtags?: string[]
+  cta?: string
+}
+
+interface TaskDetail {
+  id: string
+  recording_brief: RecordingBrief | null
+  editing_brief: EditingBrief | null
+  copy_options: CopyOption[] | null
+  status: string
+}
+
 interface Props {
   clientId: string
   initialIdeas: Array<Record<string, unknown>>
   brandBrainCompleted: boolean
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-ink-100 pt-4">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-400">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="mb-2">
+      <span className="text-[11px] font-medium text-ink-400">{label}: </span>
+      <span className="text-sm text-ink-700">{value}</span>
+    </div>
+  )
+}
+
+function BulletList({ label, items }: { label: string; items?: string[] }) {
+  if (!items?.length) return null
+  return (
+    <div className="mb-3">
+      <p className="mb-1 text-[11px] font-medium text-ink-400">{label}</p>
+      <ul className="space-y-1">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2 text-sm text-ink-700">
+            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-ink-300" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Props) {
@@ -34,6 +107,10 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const [generating, setGenerating] = useState(false)
   const [activeStatus, setActiveStatus] = useState<string>('suggested')
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [selectedIdea, setSelectedIdea] = useState<Record<string, unknown> | null>(null)
+  const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [copyExpanded, setCopyExpanded] = useState<number | null>(null)
 
   const generate = async () => {
     setGenerating(true)
@@ -79,12 +156,35 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
     }
   }
 
+  const openDetail = async (idea: Record<string, unknown>) => {
+    setSelectedIdea(idea)
+    setTaskDetail(null)
+    setCopyExpanded(null)
+    const status = idea.status as string
+    if (['approved', 'in_production', 'published'].includes(status)) {
+      setLoadingDetail(true)
+      try {
+        const res = await fetch(`/api/ideas/${idea.id as string}/detail`)
+        if (res.ok) {
+          const { task } = await res.json() as { task: TaskDetail | null }
+          setTaskDetail(task)
+        }
+      } finally {
+        setLoadingDetail(false)
+      }
+    }
+  }
+
+  const closeDetail = () => {
+    setSelectedIdea(null)
+    setTaskDetail(null)
+  }
+
   const filtered = ideas.filter((i) => i.status === activeStatus)
 
   return (
     <div className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Status tabs */}
         <div className="flex gap-1.5">
           {STATUS_COLS.map((s) => {
             const count = ideas.filter((i) => i.status === s).length
@@ -126,7 +226,11 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
           </p>
         )}
         {filtered.map((idea) => (
-          <div key={idea.id as string} className="rounded-lg border border-ink-200 bg-white p-4">
+          <div
+            key={idea.id as string}
+            onClick={() => openDetail(idea)}
+            className="cursor-pointer rounded-lg border border-ink-200 bg-white p-4 transition-shadow hover:shadow-md"
+          >
             <div className="flex items-start justify-between gap-2">
               <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', STATUS_COLOR[idea.status as string])}>
                 {idea.content_type as string}
@@ -138,14 +242,14 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
 
             <p className="mt-2 text-sm font-medium text-ink-900">{idea.concept as string}</p>
             {Boolean(idea.full_description) && (
-              <p className="mt-1 text-xs text-ink-500 line-clamp-3">{idea.full_description as string}</p>
+              <p className="mt-1 text-xs text-ink-500 line-clamp-2">{idea.full_description as string}</p>
             )}
             {Boolean(idea.angle) && (
               <p className="mt-2 text-[10px] text-ink-400">Ángulo: {idea.angle as string}</p>
             )}
 
             {activeStatus === 'suggested' && (
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => approve(idea.id as string)}
                   disabled={loadingId === idea.id as string}
@@ -162,9 +266,152 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                 </button>
               </div>
             )}
+
+            {activeStatus !== 'suggested' && (
+              <p className="mt-3 text-[10px] text-brand font-medium">Ver detalle →</p>
+            )}
           </div>
         ))}
       </div>
+
+      {/* Detail drawer */}
+      {selectedIdea && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={closeDetail} />
+          <div className="relative flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
+            {/* Drawer header */}
+            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className={cn('rounded-full px-2 py-0.5 font-medium', STATUS_COLOR[selectedIdea.status as string])}>
+                    {selectedIdea.content_type as string}
+                  </span>
+                  <span className="text-ink-400">{ORIGIN_BADGE[selectedIdea.content_origin as string] ?? ''}</span>
+                  {Boolean(selectedIdea.angle) && (
+                    <span className="text-ink-400">· {selectedIdea.angle as string}</span>
+                  )}
+                </div>
+                <h2 className="mt-1.5 text-base font-semibold text-ink-900 leading-snug">
+                  {selectedIdea.concept as string}
+                </h2>
+              </div>
+              <button
+                onClick={closeDetail}
+                className="flex-shrink-0 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Drawer body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {/* Full description */}
+              {Boolean(selectedIdea.full_description) && (
+                <Section title="Descripción">
+                  <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-line">
+                    {selectedIdea.full_description as string}
+                  </p>
+                </Section>
+              )}
+
+              {/* Human input */}
+              {Boolean(selectedIdea.human_input) && (
+                <Section title="Input original">
+                  <p className="rounded-md bg-ink-50 px-3 py-2 text-sm italic text-ink-600">
+                    &ldquo;{selectedIdea.human_input as string}&rdquo;
+                  </p>
+                </Section>
+              )}
+
+              {/* Loading task */}
+              {loadingDetail && (
+                <div className="py-6 text-center text-sm text-ink-400">Cargando briefs…</div>
+              )}
+
+              {/* Recording brief */}
+              {taskDetail?.recording_brief && (
+                <Section title="Brief de grabación">
+                  <Row label="Concepto visual" value={taskDetail.recording_brief.concept} />
+                  <Row label="Objetivo" value={taskDetail.recording_brief.objective} />
+                  <Row label="Duración material bruto" value={taskDetail.recording_brief.duracion_estimada} />
+                  <BulletList label="Planos" items={taskDetail.recording_brief.planes} />
+                  <BulletList label="Preparación" items={taskDetail.recording_brief.preparacion} />
+                  <Row label="Música referencia" value={taskDetail.recording_brief.musica_referencia} />
+                  <Row label="Referencia visual" value={taskDetail.recording_brief.referencia_visual} />
+                  <Row label="Notas técnicas" value={taskDetail.recording_brief.notas_tecnicas} />
+                </Section>
+              )}
+
+              {/* Editing brief */}
+              {taskDetail?.editing_brief && (
+                <Section title="Brief de edición">
+                  <Row label="Duración final" value={taskDetail.editing_brief.duracion_final} />
+                  <Row label="Ritmo" value={taskDetail.editing_brief.ritmo} />
+                  <Row label="Transiciones" value={taskDetail.editing_brief.transiciones} />
+                  {taskDetail.editing_brief.texto_pantalla && (
+                    <Row label="Texto en pantalla" value={taskDetail.editing_brief.texto_pantalla} />
+                  )}
+                  {taskDetail.editing_brief.tipografia && (
+                    <Row label="Tipografía" value={taskDetail.editing_brief.tipografia} />
+                  )}
+                  <Row label="Música exacta" value={taskDetail.editing_brief.musica_exacta} />
+                  <Row label="Color grade" value={taskDetail.editing_brief.color_grade} />
+                  <Row label="Exportación" value={taskDetail.editing_brief.formato_exportacion} />
+                  {taskDetail.editing_brief.notas_especiales && (
+                    <Row label="Notas especiales" value={taskDetail.editing_brief.notas_especiales} />
+                  )}
+                </Section>
+              )}
+
+              {/* Copy options */}
+              {taskDetail?.copy_options && taskDetail.copy_options.length > 0 && (
+                <Section title="Opciones de copy">
+                  <div className="space-y-3">
+                    {taskDetail.copy_options.map((opt, i) => (
+                      <div key={i} className="rounded-lg border border-ink-200 overflow-hidden">
+                        <button
+                          onClick={() => setCopyExpanded(copyExpanded === i ? null : i)}
+                          className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-ink-50"
+                        >
+                          <span className="text-xs font-semibold text-ink-700">Opción {i + 1}</span>
+                          <svg
+                            className={cn('h-4 w-4 text-ink-400 transition-transform', copyExpanded === i && 'rotate-180')}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {copyExpanded === i && (
+                          <div className="px-4 pb-4 pt-1 border-t border-ink-100">
+                            <p className="text-sm text-ink-700 whitespace-pre-line leading-relaxed">{opt.copy}</p>
+                            {opt.cta && (
+                              <p className="mt-2 text-xs font-medium text-brand">CTA: {opt.cta}</p>
+                            )}
+                            {opt.hashtags && opt.hashtags.length > 0 && (
+                              <p className="mt-2 text-[11px] text-ink-400 leading-relaxed">
+                                {opt.hashtags.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {/* No task yet (still suggested) */}
+              {!loadingDetail && !taskDetail && ['approved', 'in_production', 'published'].includes(selectedIdea.status as string) && (
+                <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                  Los briefs se están generando o no están disponibles todavía.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
