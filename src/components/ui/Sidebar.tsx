@@ -14,8 +14,11 @@ interface NavItem {
 const adminNav: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: '⬡' },
   { href: '/admin/clients', label: 'Clientes', icon: '◈' },
+  { href: '/admin/pipeline', label: 'Pipeline CRM', icon: '◫' },
+  { href: '/admin/tasks', label: 'Tareas', icon: '◱' },
   { href: '/admin/ideas', label: 'Ideas', icon: '◎' },
   { href: '/admin/review', label: 'Revisión', icon: '◇' },
+  { href: '/admin/reviews', label: 'Reseñas', icon: '◉' },
   { href: '/admin/calendar', label: 'Calendario', icon: '▦' },
   { href: '/admin/reports', label: 'Informes', icon: '▤' },
   { href: '/admin/invoices', label: 'Facturación', icon: '▧' },
