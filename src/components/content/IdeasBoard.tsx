@@ -54,6 +54,13 @@ interface CopyOption {
   cta?: string
 }
 
+interface JudgeVerdict {
+  passes: boolean
+  score: number
+  issues: string[]
+  reasoning: string
+}
+
 interface TaskDetail {
   id: string
   recording_brief: RecordingBrief | null
@@ -67,6 +74,13 @@ interface TaskDetail {
   editor_id: string | null
   deadline: string | null
   bruto_asset_ids: string[] | null
+  approval_tier: 'auto' | 'manual' | null
+  copies_per_platform: Record<string, { copy: string; hashtags: string[]; cta: string | null }> | null
+  judge_verdict: JudgeVerdict | null
+  judge_run_at: string | null
+  auto_publish_blocked_reason: string | null
+  target_platforms: string[] | null
+  publish_at: string | null
 }
 
 interface TeamMember { id: string; full_name: string }
@@ -140,7 +154,48 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const [sendingToProduction, setSendingToProduction] = useState(false)
   const [uploadingBruto, setUploadingBruto] = useState(false)
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
+  const [togglingTier, setTogglingTier] = useState(false)
+  const [runningJudge, setRunningJudge] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const toggleApprovalTier = async () => {
+    if (!taskDetail) return
+    const next = taskDetail.approval_tier === 'auto' ? 'manual' : 'auto'
+    setTogglingTier(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/approval-tier`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: next }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setTaskDetail({ ...taskDetail, approval_tier: next })
+    } catch (err) {
+      alert(`Error cambiando tier: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setTogglingTier(false)
+    }
+  }
+
+  const runJudge = async () => {
+    if (!taskDetail) return
+    setRunningJudge(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/judge`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      const { verdict } = await res.json() as { verdict: JudgeVerdict }
+      setTaskDetail({
+        ...taskDetail,
+        judge_verdict: verdict,
+        judge_run_at: new Date().toISOString(),
+        auto_publish_blocked_reason: verdict.passes ? null : verdict.issues.join('; '),
+      })
+    } catch (err) {
+      alert(`Error ejecutando judge: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setRunningJudge(false)
+    }
+  }
 
   const generate = async () => {
     setGenerating(true)
@@ -575,6 +630,89 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                   {taskDetail.editing_brief.notas_especiales && (
                     <Row label="Notas especiales" value={taskDetail.editing_brief.notas_especiales} />
                   )}
+                </Section>
+              )}
+
+              {/* Approval tier + judge */}
+              {taskDetail && (
+                <Section title="Aprobación">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                          taskDetail.approval_tier === 'auto'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-ink-100 text-ink-600'
+                        )}>
+                          {taskDetail.approval_tier === 'auto' ? '⚡ AUTO' : 'MANUAL'}
+                        </span>
+                        <button
+                          onClick={toggleApprovalTier}
+                          disabled={togglingTier || ideaStatus !== 'approved'}
+                          className="text-[11px] text-brand hover:underline disabled:cursor-not-allowed disabled:text-ink-300"
+                        >
+                          {togglingTier ? 'cambiando…' : 'cambiar'}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-ink-500">
+                        {taskDetail.approval_tier === 'auto'
+                          ? 'El sistema publicará esta pieza sin tu OK si el AI judge la aprueba.'
+                          : 'Necesita tu aprobación manual para publicarse.'}
+                      </p>
+                    </div>
+                    {taskDetail.copy_selected && (
+                      <button
+                        onClick={runJudge}
+                        disabled={runningJudge}
+                        className="rounded-md border border-ink-300 px-3 py-1.5 text-[11px] font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+                      >
+                        {runningJudge ? 'Evaluando…' : taskDetail.judge_verdict ? 'Re-evaluar' : '✦ Pasar AI judge'}
+                      </button>
+                    )}
+                  </div>
+
+                  {taskDetail.judge_verdict && (
+                    <div className={cn(
+                      'mt-3 rounded-md border p-3 text-xs',
+                      taskDetail.judge_verdict.passes
+                        ? 'border-green-200 bg-green-50 text-green-800'
+                        : 'border-orange-200 bg-orange-50 text-orange-900'
+                    )}>
+                      <p className="font-semibold">
+                        {taskDetail.judge_verdict.passes ? '✓ Apto para auto-publicar' : '⚠ Bloqueado por judge'}
+                        <span className="ml-2 font-normal opacity-70">score {(taskDetail.judge_verdict.score * 100).toFixed(0)}%</span>
+                      </p>
+                      <p className="mt-1 italic opacity-80">{taskDetail.judge_verdict.reasoning}</p>
+                      {taskDetail.judge_verdict.issues.length > 0 && (
+                        <ul className="mt-2 space-y-0.5">
+                          {taskDetail.judge_verdict.issues.map((issue, i) => (
+                            <li key={i} className="flex gap-2"><span>•</span><span>{issue}</span></li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </Section>
+              )}
+
+              {/* Per-platform copies — read-only summary */}
+              {taskDetail?.copies_per_platform && Object.keys(taskDetail.copies_per_platform).length > 0 && (
+                <Section title="Copy por plataforma">
+                  <div className="space-y-3">
+                    {Object.entries(taskDetail.copies_per_platform).map(([platform, c]) => (
+                      <div key={platform} className="rounded-lg border border-ink-200 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-brand">{platform}</p>
+                        <p className="mt-1 whitespace-pre-line text-sm text-ink-700">{c.copy}</p>
+                        {c.cta && <p className="mt-1.5 text-xs font-medium text-brand">CTA: {c.cta}</p>}
+                        {c.hashtags && c.hashtags.length > 0 && (
+                          <p className="mt-1 text-[11px] text-ink-400">
+                            {c.hashtags.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </Section>
               )}
 

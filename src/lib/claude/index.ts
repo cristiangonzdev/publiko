@@ -206,6 +206,184 @@ Responde SOLO en JSON válido.`,
   return JSON.parse(text)
 }
 
+// ============================================================================
+// SCALING: daily batch + per-platform copy + AI judge
+// ============================================================================
+
+export interface DailyGenerationConfig {
+  reels_per_day?: number
+  posts_per_day?: number
+  stories_per_day?: number
+  carrusels_per_day?: number
+  auto_tier_content_types?: string[]   // e.g. ["story"] — these skip admin approval
+  publish_hours?: string[]             // e.g. ["09:00", "14:00", "20:00"]
+  platforms?: string[]                  // e.g. ["instagram", "facebook"]
+}
+
+interface DailyIdeaDraft extends IdeaDraft {
+  approval_tier: 'auto' | 'manual'
+  suggested_publish_time?: string      // "HH:MM"
+}
+
+export async function generateDailyBatch(
+  brandBrain: Record<string, unknown>,
+  recentIdeas: Array<Record<string, unknown>>,
+  config: DailyGenerationConfig,
+  dateLabel: string,
+): Promise<DailyIdeaDraft[]> {
+  const reels = config.reels_per_day ?? 0
+  const posts = config.posts_per_day ?? 0
+  const stories = config.stories_per_day ?? 0
+  const carrusels = config.carrusels_per_day ?? 0
+  const total = reels + posts + stories + carrusels
+  if (total === 0) return []
+
+  const autoTypes = config.auto_tier_content_types ?? []
+  const hours = config.publish_hours ?? ['09:00', '14:00', '20:00']
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4000,
+    system: buildSystemPrompt({ ...brandBrain, performance_learning: { ...((brandBrain.performance_learning as Record<string, unknown>) ?? {}), recent_ideas: recentIdeas } }),
+    messages: [
+      {
+        role: 'user',
+        content: `Genera el plan de contenido para el ${dateLabel}.
+
+VOLUMEN OBJETIVO HOY:
+- ${reels} reel${reels === 1 ? '' : 's'}
+- ${posts} post${posts === 1 ? '' : 's'}
+- ${stories} stor${stories === 1 ? 'y' : 'ies'}
+- ${carrusels} carrusel${carrusels === 1 ? '' : 'es'}
+TOTAL: ${total} piezas
+
+Cada pieza debe ser ÚNICA y aportar algo distinto en el feed. Stories pueden ser más informales / behind-scenes; posts más estructurados; reels con hook fuerte en 3s.
+
+VALORES EXACTOS PERMITIDOS:
+- content_type: "reel" | "post" | "story" | "carrusel"
+- angle: "emocional" | "informativo" | "humor" | "social_proof" | "educativo" | "aspiracional" | "detras_escenas" | "anuncio" | "opinion" | "historia"
+- approval_tier: "auto" para tipos en ${JSON.stringify(autoTypes)}, "manual" para el resto. Si una pieza es delicada (oferta, anuncio, mensaje sensible), fuerza "manual" aunque su tipo esté en auto.
+- suggested_publish_time: elige una hora de esta lista: ${JSON.stringify(hours)}, distribuyendo equitativamente.
+
+Responde SOLO con JSON válido, sin markdown:
+{"ideas":[{"concept":"","full_description":"","content_type":"story","angle":"detras_escenas","content_pillar":"","content_origin":"system","approval_tier":"auto","suggested_publish_time":"09:00"}]}`,
+      },
+    ],
+  })
+
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
+  const parsed = JSON.parse(text) as { ideas: DailyIdeaDraft[] }
+  return parsed.ideas ?? []
+}
+
+export async function generateCopiesPerPlatform(
+  brandBrain: Record<string, unknown>,
+  idea: Record<string, unknown>,
+  platforms: string[],
+): Promise<Record<string, { copy: string; hashtags: string[]; cta: string }>> {
+  if (platforms.length === 0) return {}
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1500,
+    system: buildSystemPrompt(brandBrain),
+    messages: [
+      {
+        role: 'user',
+        content: `Genera copy adaptado a cada plataforma para esta idea:
+Concepto: ${idea.concept}
+Descripción: ${idea.full_description}
+Tipo: ${idea.content_type}
+Ángulo: ${idea.angle}
+
+PLATAFORMAS: ${platforms.join(', ')}
+
+Reglas por plataforma:
+- instagram: tono cercano, caption rica, 5-10 hashtags relevantes (sin spam), CTA suave
+- facebook: tono ligeramente más narrativo, 0-3 hashtags, CTA explícito
+- tiktok: gancho fuerte primera línea, lenguaje conversacional, 3-5 hashtags + uno de tendencia si encaja, CTA con ritmo
+- gmb: descriptivo y orientado a búsqueda local, sin hashtags, CTA hacia reserva/llamada
+
+Responde SOLO con JSON válido (claves = nombres de plataforma):
+${platforms.map((p) => `"${p}":{"copy":"","hashtags":[],"cta":""}`).join(',')}
+
+JSON: {${platforms.map((p) => `"${p}":{"copy":"","hashtags":[],"cta":""}`).join(',')}}`,
+      },
+    ],
+  })
+
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
+  return JSON.parse(text)
+}
+
+export interface JudgeVerdict {
+  passes: boolean
+  score: number          // 0..1
+  issues: string[]       // empty if passes
+  reasoning: string
+}
+
+export async function judgeContent(
+  brandBrain: Record<string, unknown>,
+  payload: {
+    concept: string
+    content_type: string
+    copy: string
+    hashtags?: string[]
+    cta?: string
+  },
+): Promise<JudgeVerdict> {
+  const voice = (brandBrain.voice as Record<string, unknown>) ?? {}
+  const forbidden = ((voice.forbidden_words as string[]) ?? []).concat((voice.forbidden_topics as string[]) ?? [])
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    system: `Eres un revisor de marca riguroso. Tu trabajo: detectar contenido que NO debería auto-publicarse porque viola la voz, contiene errores, o es sensible.
+
+Marca: ${((brandBrain.identity as Record<string, string>) ?? {}).business_name ?? ''}
+Voz: ${((voice.personality_traits as string[]) ?? []).join(', ')}
+Anti-tono: ${voice.anti_tone ?? ''}
+Palabras/temas prohibidos: ${forbidden.join(', ') || 'ninguno'}
+
+CRITERIOS DE RECHAZO (cualquiera basta):
+- Faltas de ortografía o gramaticales claras
+- Tono fuera de marca (genérico, robótico, demasiado formal o informal)
+- Uso de palabras/temas prohibidos
+- CTA confuso, ambiguo o ausente cuando hace falta
+- Hashtags spam, repetidos o irrelevantes
+- Contenido sensible (precios concretos, promesas legales, salud, política, religión) que necesita revisión humana
+- Mención de cantidades, fechas o datos sin verificar
+- Errores tipográficos o emojis fuera de estilo
+
+Si TODO está bien y se puede publicar sin intervención: passes=true.
+Si HAY UN solo problema: passes=false e indica los issues concretos.`,
+    messages: [
+      {
+        role: 'user',
+        content: `Evalúa esta pieza para auto-publicación:
+
+Tipo: ${payload.content_type}
+Concepto: ${payload.concept}
+
+Copy:
+"""
+${payload.copy}
+"""
+
+Hashtags: ${(payload.hashtags ?? []).map((h) => `#${h.replace(/^#/, '')}`).join(' ') || '(ninguno)'}
+CTA: ${payload.cta ?? '(ninguno)'}
+
+Responde SOLO en JSON válido:
+{"passes":true|false,"score":0.0-1.0,"issues":["..."],"reasoning":"breve explicación"}`,
+      },
+    ],
+  })
+
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
+  return JSON.parse(text) as JudgeVerdict
+}
+
 export async function generateReviewResponse(
   brandBrain: Record<string, unknown>,
   review: { author_name: string; rating: number; text: string }

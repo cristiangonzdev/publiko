@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BrollsManager } from '@/components/admin/BrollsManager'
+import { GenerationConfigPanel } from '@/components/admin/GenerationConfigPanel'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -171,6 +172,13 @@ export default async function ClientDetailPage({ params }: Props) {
             ))}
           </div>
         </section>
+
+        <div className="lg:col-span-2">
+          <GenerationConfigPanel
+            clientId={id}
+            initialConfig={(client.daily_generation_config as Record<string, unknown>) ?? {}}
+          />
+        </div>
 
         <div className="lg:col-span-2">
           <BrollsManager clientId={id} />

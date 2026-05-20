@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/cleanup-assets",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/daily-generation",
+      "schedule": "0 6 * * *"
     }
   ]
 }
