@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { AddIdeaModal } from './AddIdeaModal'
 
 const STATUS_COLS = ['suggested', 'approved', 'in_production', 'published', 'discarded'] as const
@@ -58,14 +59,24 @@ interface TaskDetail {
   recording_brief: RecordingBrief | null
   editing_brief: EditingBrief | null
   copy_options: CopyOption[] | null
+  copy_selected: string | null
+  hashtags: string[] | null
+  cta: string | null
   status: string
+  grabador_id: string | null
+  editor_id: string | null
+  deadline: string | null
+  bruto_asset_ids: string[] | null
 }
+
+interface TeamMember { id: string; full_name: string }
 
 interface Props {
   clientId: string
   initialIdeas: Array<Record<string, unknown>>
   brandBrainCompleted: boolean
-  // clientId needed for feedback API
+  grabadores: TeamMember[]
+  editores: TeamMember[]
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -104,7 +115,13 @@ function BulletList({ label, items }: { label: string; items?: string[] }) {
   )
 }
 
-export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Props) {
+function findCopyIndex(options: CopyOption[] | null, selected: string | null): number | null {
+  if (!options || !selected) return null
+  const idx = options.findIndex((o) => (o.copy ?? '') === selected)
+  return idx >= 0 ? idx : null
+}
+
+export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabadores, editores }: Props) {
   const [ideas, setIdeas] = useState(initialIdeas)
   const [generating, setGenerating] = useState(false)
   const [activeStatus, setActiveStatus] = useState<string>('suggested')
@@ -112,9 +129,18 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const [selectedIdea, setSelectedIdea] = useState<Record<string, unknown> | null>(null)
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [copyExpanded, setCopyExpanded] = useState<number | null>(null)
   const [showAddIdea, setShowAddIdea] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set())
+
+  // Drawer-local state for production flow
+  const [savingCopyIndex, setSavingCopyIndex] = useState<number | null>(null)
+  const [grabadorPick, setGrabadorPick] = useState<string>('')
+  const [editorPick, setEditorPick] = useState<string>('')
+  const [savingTeam, setSavingTeam] = useState(false)
+  const [sendingToProduction, setSendingToProduction] = useState(false)
+  const [uploadingBruto, setUploadingBruto] = useState(false)
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const generate = async () => {
     setGenerating(true)
@@ -163,7 +189,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const openDetail = async (idea: Record<string, unknown>) => {
     setSelectedIdea(idea)
     setTaskDetail(null)
-    setCopyExpanded(null)
+    setUploadMessage(null)
     const status = idea.status as string
     if (['approved', 'in_production', 'published'].includes(status)) {
       setLoadingDetail(true)
@@ -172,6 +198,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
         if (res.ok) {
           const { task } = await res.json() as { task: TaskDetail | null }
           setTaskDetail(task)
+          setGrabadorPick(task?.grabador_id ?? '')
+          setEditorPick(task?.editor_id ?? '')
         }
       } finally {
         setLoadingDetail(false)
@@ -182,6 +210,108 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const closeDetail = () => {
     setSelectedIdea(null)
     setTaskDetail(null)
+    setGrabadorPick('')
+    setEditorPick('')
+    setUploadMessage(null)
+  }
+
+  const selectCopy = async (copyIndex: number) => {
+    if (!taskDetail) return
+    setSavingCopyIndex(copyIndex)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/select-copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copy_index: copyIndex }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const chosen = taskDetail.copy_options?.[copyIndex]
+      setTaskDetail({
+        ...taskDetail,
+        copy_selected: chosen?.copy ?? '',
+        hashtags: chosen?.hashtags ?? null,
+        cta: chosen?.cta ?? null,
+      })
+    } catch (err) {
+      alert(`Error eligiendo copy: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSavingCopyIndex(null)
+    }
+  }
+
+  const saveTeam = async () => {
+    if (!taskDetail) return
+    if (grabadorPick === (taskDetail.grabador_id ?? '') && editorPick === (taskDetail.editor_id ?? '')) return
+    setSavingTeam(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grabador_id: grabadorPick || null,
+          editor_id: editorPick || null,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setTaskDetail({
+        ...taskDetail,
+        grabador_id: grabadorPick || null,
+        editor_id: editorPick || null,
+      })
+    } catch (err) {
+      alert(`Error asignando equipo: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSavingTeam(false)
+    }
+  }
+
+  const sendToProduction = async () => {
+    if (!taskDetail || !selectedIdea) return
+    if (!taskDetail.copy_selected) {
+      alert('Elige un copy antes de enviar a producción.')
+      return
+    }
+    setSendingToProduction(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/to-production`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      const ideaId = selectedIdea.id as string
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'in_production' } : i))
+      setSelectedIdea({ ...selectedIdea, status: 'in_production' })
+      setTaskDetail({ ...taskDetail, status: 'recording' })
+      setActiveStatus('in_production')
+    } catch (err) {
+      alert(`Error enviando a producción: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSendingToProduction(false)
+    }
+  }
+
+  const handleBrutoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !taskDetail) return
+    setUploadingBruto(true)
+    setUploadMessage(`Subiendo ${file.name}…`)
+
+    try {
+      const { asset_id } = await uploadViaSignedUrl({
+        prepareEndpoint: `/api/tasks/${taskDetail.id}/bruto-prepare`,
+        confirmEndpoint: `/api/tasks/${taskDetail.id}/bruto-confirm`,
+        file,
+      })
+      setTaskDetail({
+        ...taskDetail,
+        status: 'brutos_ready',
+        bruto_asset_ids: [...(taskDetail.bruto_asset_ids ?? []), asset_id],
+      })
+      setUploadMessage('✓ Bruto subido y editor avisado por Telegram')
+    } catch (err) {
+      setUploadMessage(null)
+      alert(`Error subiendo bruto: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setUploadingBruto(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
   }
 
   const markSuccess = async (idea: Record<string, unknown>) => {
@@ -206,8 +336,16 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
 
   const filtered = ideas.filter((i) => i.status === activeStatus)
 
+  const ideaStatus = (selectedIdea?.status as string | undefined) ?? ''
+  const taskStatus = taskDetail?.status ?? ''
+  const selectedCopyIdx = findCopyIndex(taskDetail?.copy_options ?? null, taskDetail?.copy_selected ?? null)
+  const teamDirty = !!taskDetail && (grabadorPick !== (taskDetail.grabador_id ?? '') || editorPick !== (taskDetail.editor_id ?? ''))
+  const brutosCount = taskDetail?.bruto_asset_ids?.length ?? 0
+
   return (
     <div className="mt-8">
+      <input ref={fileRef} type="file" accept="video/*,image/*" className="hidden" onChange={handleBrutoUpload} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5">
           {STATUS_COLS.map((s) => {
@@ -345,7 +483,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
             <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                  <span className={cn('rounded-full px-2 py-0.5 font-medium', STATUS_COLOR[selectedIdea.status as string])}>
+                  <span className={cn('rounded-full px-2 py-0.5 font-medium', STATUS_COLOR[ideaStatus])}>
                     {selectedIdea.content_type as string}
                   </span>
                   <span className="text-ink-400">{ORIGIN_BADGE[selectedIdea.content_origin as string] ?? ''}</span>
@@ -357,7 +495,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                   {selectedIdea.concept as string}
                 </h2>
               </div>
-              {selectedIdea.status === 'published' && (
+              {ideaStatus === 'published' && (
                 <button
                   onClick={() => markSuccess(selectedIdea)}
                   className={cn(
@@ -440,25 +578,43 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                 </Section>
               )}
 
-              {/* Copy options */}
+              {/* Copy options — SELECTABLE */}
               {taskDetail?.copy_options && taskDetail.copy_options.length > 0 && (
-                <Section title="Opciones de copy">
+                <Section title="Elige el copy">
                   <div className="space-y-3">
-                    {taskDetail.copy_options.map((opt, i) => (
-                      <div key={i} className="rounded-lg border border-ink-200 overflow-hidden">
-                        <button
-                          onClick={() => setCopyExpanded(copyExpanded === i ? null : i)}
-                          className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-ink-50"
+                    {taskDetail.copy_options.map((opt, i) => {
+                      const isSelected = selectedCopyIdx === i
+                      const isSaving = savingCopyIndex === i
+                      return (
+                        <div
+                          key={i}
+                          className={cn(
+                            'rounded-lg border overflow-hidden transition-colors',
+                            isSelected ? 'border-brand bg-brand/5' : 'border-ink-200'
+                          )}
                         >
-                          <span className="text-xs font-semibold text-ink-700">Opción {i + 1}</span>
-                          <svg
-                            className={cn('h-4 w-4 text-ink-400 transition-transform', copyExpanded === i && 'rotate-180')}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        {copyExpanded === i && (
+                          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className={cn(
+                                'flex h-4 w-4 items-center justify-center rounded-full border-2',
+                                isSelected ? 'border-brand bg-brand' : 'border-ink-300'
+                              )}>
+                                {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                              </span>
+                              <span className="text-xs font-semibold text-ink-700">
+                                Opción {i + 1} {isSelected && <span className="text-brand">· elegida</span>}
+                              </span>
+                            </div>
+                            {!isSelected && ideaStatus === 'approved' && (
+                              <button
+                                onClick={() => selectCopy(i)}
+                                disabled={savingCopyIndex !== null}
+                                className="rounded-md border border-ink-300 px-3 py-1 text-[11px] font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+                              >
+                                {isSaving ? 'Guardando…' : 'Usar este copy'}
+                              </button>
+                            )}
+                          </div>
                           <div className="px-4 pb-4 pt-1 border-t border-ink-100">
                             <p className="text-sm text-ink-700 whitespace-pre-line leading-relaxed">{opt.copy}</p>
                             {opt.cta && (
@@ -470,20 +626,110 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                               </p>
                             )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      )
+                    })}
                   </div>
                 </Section>
               )}
 
-              {/* No task yet (still suggested) */}
-              {!loadingDetail && !taskDetail && ['approved', 'in_production', 'published'].includes(selectedIdea.status as string) && (
+              {/* Team assignment (visible while idea is approved) */}
+              {taskDetail && ideaStatus === 'approved' && (grabadores.length > 0 || editores.length > 0) && (
+                <Section title="Equipo asignado (opcional)">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-ink-500">Grabador</span>
+                      <select
+                        value={grabadorPick}
+                        onChange={(e) => setGrabadorPick(e.target.value)}
+                        className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+                      >
+                        <option value="">Yo (admin)</option>
+                        {grabadores.map((g) => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-ink-500">Editor</span>
+                      <select
+                        value={editorPick}
+                        onChange={(e) => setEditorPick(e.target.value)}
+                        className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+                      >
+                        <option value="">Sin asignar</option>
+                        {editores.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  {teamDirty && (
+                    <button
+                      onClick={saveTeam}
+                      disabled={savingTeam}
+                      className="mt-3 rounded border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+                    >
+                      {savingTeam ? 'Guardando…' : 'Guardar asignación'}
+                    </button>
+                  )}
+                </Section>
+              )}
+
+              {/* In-production controls: upload bruto */}
+              {taskDetail && (ideaStatus === 'in_production' || taskStatus === 'recording' || taskStatus === 'brutos_ready') && (
+                <Section title="Grabación">
+                  {taskDetail.copy_selected && (
+                    <div className="mb-3 rounded-md bg-blue-50 p-3 text-xs text-blue-900">
+                      <p className="font-semibold mb-1">Copy final que usará el editor:</p>
+                      <p className="whitespace-pre-line">{taskDetail.copy_selected}</p>
+                    </div>
+                  )}
+                  {brutosCount > 0 && (
+                    <p className="mb-2 text-xs text-green-700">
+                      ✓ {brutosCount} archivo{brutosCount === 1 ? '' : 's'} subido{brutosCount === 1 ? '' : 's'} {taskDetail.editor_id ? '— editor avisado' : '— admin avisado'}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploadingBruto}
+                    className="w-full rounded-md bg-ink-900 py-2.5 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
+                  >
+                    {uploadingBruto ? (uploadMessage ?? 'Subiendo…') : (brutosCount > 0 ? '+ Añadir otro bruto' : '↑ Subir mi grabación')}
+                  </button>
+                  {uploadMessage && !uploadingBruto && (
+                    <p className="mt-2 text-xs text-green-700">{uploadMessage}</p>
+                  )}
+                </Section>
+              )}
+            </div>
+
+            {/* Drawer footer: Send to production */}
+            {taskDetail && ideaStatus === 'approved' && (
+              <div className="border-t border-ink-100 bg-ink-50 px-6 py-4">
+                <button
+                  onClick={sendToProduction}
+                  disabled={!taskDetail.copy_selected || sendingToProduction}
+                  className="w-full rounded-md bg-brand py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {sendingToProduction
+                    ? 'Enviando…'
+                    : taskDetail.copy_selected
+                      ? '→ Enviar a producción'
+                      : 'Elige un copy para continuar'}
+                </button>
+                {!taskDetail.copy_selected && (
+                  <p className="mt-2 text-center text-[11px] text-ink-400">
+                    Sin copy elegido, el editor no sabrá qué usar.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* No task yet (still suggested) */}
+            {!loadingDetail && !taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (
+              <div className="border-t border-ink-100 px-6 py-4">
                 <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                   Los briefs se están generando o no están disponibles todavía.
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

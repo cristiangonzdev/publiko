@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
+import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
+import { BrollsPanel } from './BrollsPanel'
 
 const COLS = [
   { key: 'brutos_ready', label: 'Brutos listos' },
@@ -31,6 +33,7 @@ interface Task {
   id: string
   title: string
   client_id: string
+  client_name?: string
   status: string
   deadline: string | null
   copy_selected: string | null
@@ -54,6 +57,7 @@ export function EditorKanban({ initialTasks }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [brutos, setBrutos] = useState<Record<string, Bruto[]>>({})
   const [loadingBrutos, setLoadingBrutos] = useState<string | null>(null)
+  const [brollsClient, setBrollsClient] = useState<{ id: string; name: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadingTask = useRef<string | null>(null)
 
@@ -86,13 +90,12 @@ export function EditorKanban({ initialTasks }: Props) {
     if (!file || !taskId) return
 
     setUploading(taskId)
-    const form = new FormData()
-    form.append('file', file)
-    form.append('task_id', taskId)
-
     try {
-      const res = await fetch('/api/upload/deliverable', { method: 'POST', body: form })
-      if (!res.ok) throw new Error(await res.text())
+      await uploadViaSignedUrl({
+        prepareEndpoint: `/api/tasks/${taskId}/deliverable-prepare`,
+        confirmEndpoint: `/api/tasks/${taskId}/deliverable-confirm`,
+        file,
+      })
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: 'delivered' } : t))
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : String(err)}`)
@@ -117,6 +120,14 @@ export function EditorKanban({ initialTasks }: Props) {
   return (
     <div className="mt-6">
       <input ref={fileRef} type="file" accept="video/*,image/*" className="hidden" onChange={handleFileSelect} />
+
+      {brollsClient && (
+        <BrollsPanel
+          clientId={brollsClient.id}
+          clientName={brollsClient.name}
+          onClose={() => setBrollsClient(null)}
+        />
+      )}
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {COLS.map((col) => {
@@ -146,12 +157,21 @@ export function EditorKanban({ initialTasks }: Props) {
                     <div key={task.id} className="rounded-lg border border-ink-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-ink-900 leading-snug">{task.title}</p>
-                        <button
-                          onClick={() => toggleExpand(task.id)}
-                          className="text-[10px] text-ink-400 hover:text-ink-600 flex-shrink-0"
-                        >
-                          {isExpanded ? 'cerrar' : 'brief'}
-                        </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => setBrollsClient({ id: task.client_id, name: task.client_name ?? '' })}
+                            className="text-[10px] text-ink-400 hover:text-brand"
+                            title="Ver b-rolls del cliente"
+                          >
+                            📁 b-rolls
+                          </button>
+                          <button
+                            onClick={() => toggleExpand(task.id)}
+                            className="text-[10px] text-ink-400 hover:text-ink-600"
+                          >
+                            {isExpanded ? 'cerrar' : 'brief'}
+                          </button>
+                        </div>
                       </div>
 
                       {task.deadline && (

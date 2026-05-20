@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { BrollsManager } from '@/components/admin/BrollsManager'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -170,6 +171,10 @@ export default async function ClientDetailPage({ params }: Props) {
             ))}
           </div>
         </section>
+
+        <div className="lg:col-span-2">
+          <BrollsManager clientId={id} />
+        </div>
 
         <section className="rounded-lg border border-ink-200 bg-white lg:col-span-2">
           <div className="border-b border-ink-100 px-5 py-3">

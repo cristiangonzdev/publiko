@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: task } = await supabase
     .from('content_tasks')
-    .select('id, recording_brief, editing_brief, copy_options, status')
+    .select('id, recording_brief, editing_brief, copy_options, copy_selected, hashtags, cta, status, grabador_id, editor_id, deadline, bruto_asset_ids')
     .eq('idea_id', id)
     .maybeSingle()
 

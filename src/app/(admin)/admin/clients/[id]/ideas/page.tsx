@@ -10,7 +10,7 @@ export default async function ClientIdeasPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: client }, { data: ideas }, { data: brain }] = await Promise.all([
+  const [{ data: client }, { data: ideas }, { data: brain }, { data: team }] = await Promise.all([
     supabase.from('clients').select('id, business_name').eq('id', id).single(),
     supabase
       .from('content_ideas')
@@ -18,9 +18,17 @@ export default async function ClientIdeasPage({ params }: Props) {
       .eq('client_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('brand_brains').select('onboarding_completed').eq('client_id', id).single(),
+    supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('role', ['grabador', 'editor'])
+      .eq('is_active', true),
   ])
 
   if (!client) notFound()
+
+  const grabadores = (team ?? []).filter((p) => p.role === 'grabador').map((p) => ({ id: p.id, full_name: p.full_name }))
+  const editores = (team ?? []).filter((p) => p.role === 'editor').map((p) => ({ id: p.id, full_name: p.full_name }))
 
   return (
     <div className="p-8">
@@ -35,6 +43,8 @@ export default async function ClientIdeasPage({ params }: Props) {
         clientId={id}
         initialIdeas={(ideas ?? []) as unknown as Array<Record<string, unknown>>}
         brandBrainCompleted={brain?.onboarding_completed ?? false}
+        grabadores={grabadores}
+        editores={editores}
       />
     </div>
   )

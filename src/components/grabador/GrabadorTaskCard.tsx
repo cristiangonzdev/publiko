@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
+import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 
 interface RecordingBrief {
   concept?: string
@@ -37,12 +38,12 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
     setUploading(true)
     setUploadProgress(`Subiendo ${file.name}…`)
 
-    const form = new FormData()
-    form.append('file', file)
-
     try {
-      const res = await fetch(`/api/tasks/${taskId}/upload-bruto`, { method: 'POST', body: form })
-      if (!res.ok) throw new Error(await res.text())
+      await uploadViaSignedUrl({
+        prepareEndpoint: `/api/tasks/${taskId}/bruto-prepare`,
+        confirmEndpoint: `/api/tasks/${taskId}/bruto-confirm`,
+        file,
+      })
       setCurrentStatus('brutos_ready')
       setUploadProgress(null)
     } catch (err) {
