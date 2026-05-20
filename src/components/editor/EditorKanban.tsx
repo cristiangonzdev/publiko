@@ -20,6 +20,13 @@ const DEADLINE_COLOR = (deadline: string | null) => {
   return 'text-ink-400'
 }
 
+interface Bruto {
+  id: string
+  file_name: string
+  public_url: string | null
+  file_size: number | null
+}
+
 interface Task {
   id: string
   title: string
@@ -35,10 +42,18 @@ interface Props {
   initialTasks: Task[]
 }
 
+function formatBytes(bytes: number | null) {
+  if (!bytes) return ''
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export function EditorKanban({ initialTasks }: Props) {
   const [tasks, setTasks] = useState(initialTasks)
   const [uploading, setUploading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [brutos, setBrutos] = useState<Record<string, Bruto[]>>({})
+  const [loadingBrutos, setLoadingBrutos] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadingTask = useRef<string | null>(null)
 
@@ -49,6 +64,20 @@ export function EditorKanban({ initialTasks }: Props) {
       body: JSON.stringify({ status: newStatus }),
     })
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t))
+  }
+
+  const loadBrutos = async (taskId: string) => {
+    if (brutos[taskId]) return
+    setLoadingBrutos(taskId)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/brutos-urls`)
+      if (res.ok) {
+        const { brutos: files } = await res.json() as { brutos: Bruto[] }
+        setBrutos((prev) => ({ ...prev, [taskId]: files }))
+      }
+    } finally {
+      setLoadingBrutos(null)
+    }
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +108,12 @@ export function EditorKanban({ initialTasks }: Props) {
     fileRef.current?.click()
   }
 
+  const toggleExpand = async (taskId: string) => {
+    const next = expanded === taskId ? null : taskId
+    setExpanded(next)
+    if (next) await loadBrutos(taskId)
+  }
+
   return (
     <div className="mt-6">
       <input ref={fileRef} type="file" accept="video/*,image/*" className="hidden" onChange={handleFileSelect} />
@@ -87,7 +122,7 @@ export function EditorKanban({ initialTasks }: Props) {
         {COLS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key)
           return (
-            <div key={col.key} className="min-w-[260px] flex-shrink-0">
+            <div key={col.key} className="min-w-[280px] flex-shrink-0">
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">{col.label}</span>
                 {colTasks.length > 0 && (
@@ -105,12 +140,14 @@ export function EditorKanban({ initialTasks }: Props) {
                 {colTasks.map((task) => {
                   const brief = task.editing_brief as Record<string, string> | null
                   const isExpanded = expanded === task.id
+                  const taskBrutos = brutos[task.id] ?? []
+
                   return (
                     <div key={task.id} className="rounded-lg border border-ink-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-ink-900 leading-snug">{task.title}</p>
                         <button
-                          onClick={() => setExpanded(isExpanded ? null : task.id)}
+                          onClick={() => toggleExpand(task.id)}
                           className="text-[10px] text-ink-400 hover:text-ink-600 flex-shrink-0"
                         >
                           {isExpanded ? 'cerrar' : 'brief'}
@@ -123,22 +160,55 @@ export function EditorKanban({ initialTasks }: Props) {
                         </p>
                       )}
 
-                      {isExpanded && brief && (
-                        <div className="mt-3 space-y-1.5 rounded bg-ink-50 p-3 text-[11px] text-ink-600">
-                          {brief.duracion_final && <p><span className="font-semibold">Duración:</span> {brief.duracion_final}</p>}
-                          {brief.ritmo && <p><span className="font-semibold">Ritmo:</span> {brief.ritmo}</p>}
-                          {brief.transiciones && <p><span className="font-semibold">Transiciones:</span> {brief.transiciones}</p>}
-                          {brief.musica_exacta && <p><span className="font-semibold">Música:</span> {brief.musica_exacta}</p>}
-                          {brief.color_grade && <p><span className="font-semibold">Color:</span> {brief.color_grade}</p>}
-                          {brief.formato_exportacion && <p><span className="font-semibold">Exportar:</span> {brief.formato_exportacion}</p>}
-                          {brief.notas_especiales && <p className="mt-1 text-ink-500 italic">{brief.notas_especiales}</p>}
-                        </div>
-                      )}
+                      {isExpanded && (
+                        <div className="mt-3 space-y-3">
+                          {/* Brutos para descargar */}
+                          {(col.key === 'brutos_ready' || col.key === 'editing') && (
+                            <div className="rounded bg-ink-50 p-3">
+                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+                                Archivos del grabador
+                              </p>
+                              {loadingBrutos === task.id && (
+                                <p className="text-xs text-ink-400">Cargando…</p>
+                              )}
+                              {taskBrutos.length === 0 && loadingBrutos !== task.id && (
+                                <p className="text-xs text-ink-400">Sin archivos subidos todavía.</p>
+                              )}
+                              {taskBrutos.map((b) => (
+                                <a
+                                  key={b.id}
+                                  href={b.public_url ?? '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between gap-2 py-1 text-xs text-brand hover:underline"
+                                >
+                                  <span className="truncate">{b.file_name}</span>
+                                  <span className="flex-shrink-0 text-ink-400">{formatBytes(b.file_size)}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
 
-                      {isExpanded && task.copy_selected && (
-                        <div className="mt-2 rounded bg-blue-50 p-3 text-[11px] text-blue-800">
-                          <p className="font-semibold mb-1">Copy final:</p>
-                          <p className="whitespace-pre-wrap">{task.copy_selected}</p>
+                          {/* Brief de edición */}
+                          {brief && (
+                            <div className="rounded bg-ink-50 p-3 text-[11px] text-ink-600 space-y-1.5">
+                              {brief.duracion_final && <p><span className="font-semibold">Duración:</span> {brief.duracion_final}</p>}
+                              {brief.ritmo && <p><span className="font-semibold">Ritmo:</span> {brief.ritmo}</p>}
+                              {brief.transiciones && <p><span className="font-semibold">Transiciones:</span> {brief.transiciones}</p>}
+                              {brief.musica_exacta && <p><span className="font-semibold">Música:</span> {brief.musica_exacta}</p>}
+                              {brief.color_grade && <p><span className="font-semibold">Color:</span> {brief.color_grade}</p>}
+                              {brief.formato_exportacion && <p><span className="font-semibold">Exportar:</span> {brief.formato_exportacion}</p>}
+                              {brief.notas_especiales && <p className="mt-1 italic text-ink-500">{brief.notas_especiales}</p>}
+                            </div>
+                          )}
+
+                          {/* Copy seleccionado */}
+                          {task.copy_selected && (
+                            <div className="rounded bg-blue-50 p-3 text-[11px] text-blue-800">
+                              <p className="font-semibold mb-1">Copy final:</p>
+                              <p className="whitespace-pre-wrap">{task.copy_selected}</p>
+                            </div>
+                          )}
                         </div>
                       )}
 

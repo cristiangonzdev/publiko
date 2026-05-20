@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface RecordingBrief {
@@ -12,7 +12,6 @@ interface RecordingBrief {
   musica_referencia?: string
   referencia_visual?: string
   notas_tecnicas?: string
-  deadline?: string
 }
 
 interface Props {
@@ -24,21 +23,34 @@ interface Props {
   driveFolderId: string | null
 }
 
-export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBrief, driveFolderId }: Props) {
+export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBrief }: Props) {
   const [currentStatus, setCurrentStatus] = useState(status)
-  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const markBrutosReady = async () => {
-    setLoading(true)
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setUploadProgress(`Subiendo ${file.name}…`)
+
+    const form = new FormData()
+    form.append('file', file)
+
     try {
-      const res = await fetch(`/api/tasks/${taskId}/brutos-ready`, { method: 'POST' })
+      const res = await fetch(`/api/tasks/${taskId}/upload-bruto`, { method: 'POST', body: form })
       if (!res.ok) throw new Error(await res.text())
       setCurrentStatus('brutos_ready')
+      setUploadProgress(null)
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : String(err)}`)
+      alert(`Error subiendo: ${err instanceof Error ? err.message : String(err)}`)
+      setUploadProgress(null)
     } finally {
-      setLoading(false)
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -51,6 +63,14 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
       'rounded-lg border bg-white shadow-sm',
       currentStatus === 'brutos_ready' ? 'border-green-200' : 'border-ink-200'
     )}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="video/*,image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -67,7 +87,7 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
               'bg-ink-100 text-ink-500'
             )}>
               {currentStatus === 'brutos_ready' ? 'Brutos listos' :
-               currentStatus === 'recording' ? 'Grabando' : currentStatus}
+               currentStatus === 'recording' ? 'Grabando' : 'Pendiente'}
             </span>
             {daysLeft !== null && (
               <p className={cn('mt-1 text-[11px]',
@@ -82,39 +102,35 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs text-brand hover:underline"
-          >
-            {expanded ? 'Ocultar ficha' : 'Ver ficha de grabación'}
-          </button>
-
-          {driveFolderId && (
-            <a
-              href={`https://drive.google.com/drive/folders/${driveFolderId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-ink-500 hover:text-ink-700 hover:underline"
-            >
-              Abrir Drive →
-            </a>
-          )}
-        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-4 text-xs text-brand hover:underline"
+        >
+          {expanded ? 'Ocultar ficha' : 'Ver ficha de grabación'}
+        </button>
 
         {currentStatus !== 'brutos_ready' && (
           <button
-            onClick={markBrutosReady}
-            disabled={loading}
-            className="mt-3 w-full rounded-md bg-ink-900 py-2 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="mt-3 w-full rounded-md bg-ink-900 py-2.5 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
           >
-            {loading ? 'Guardando…' : '✓ Marcar brutos listos'}
+            {uploading ? (uploadProgress ?? 'Subiendo…') : '↑ Subir brutos y avisar al editor'}
           </button>
         )}
 
         {currentStatus === 'brutos_ready' && (
-          <div className="mt-3 rounded-md bg-green-50 py-2 text-center text-sm font-medium text-green-700">
-            ✓ Brutos enviados al editor
+          <div className="mt-3 space-y-2">
+            <div className="rounded-md bg-green-50 py-2 text-center text-sm font-medium text-green-700">
+              ✓ Brutos enviados al editor
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="w-full rounded-md border border-ink-200 py-1.5 text-xs text-ink-500 hover:bg-ink-50 disabled:opacity-50"
+            >
+              {uploading ? 'Subiendo…' : '+ Añadir otro archivo'}
+            </button>
           </div>
         )}
       </div>
@@ -147,9 +163,7 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Preparación necesaria</p>
               <ul className="mt-1 space-y-0.5">
                 {recordingBrief.preparacion.map((p, i) => (
-                  <li key={i} className="flex gap-2 text-ink-700">
-                    <span>·</span>{p}
-                  </li>
+                  <li key={i} className="flex gap-2 text-ink-700"><span>·</span>{p}</li>
                 ))}
               </ul>
             </div>
@@ -157,7 +171,7 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
 
           {recordingBrief.duracion_estimada && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Duración estimada del bruto</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Duración del bruto</p>
               <p className="mt-1 text-ink-700">{recordingBrief.duracion_estimada}</p>
             </div>
           )}

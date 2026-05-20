@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { AddIdeaModal } from './AddIdeaModal'
 
 const STATUS_COLS = ['suggested', 'approved', 'in_production', 'published', 'discarded'] as const
 const STATUS_LABEL: Record<string, string> = {
@@ -64,6 +65,7 @@ interface Props {
   clientId: string
   initialIdeas: Array<Record<string, unknown>>
   brandBrainCompleted: boolean
+  // clientId needed for feedback API
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -111,6 +113,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [copyExpanded, setCopyExpanded] = useState<number | null>(null)
+  const [showAddIdea, setShowAddIdea] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set())
 
   const generate = async () => {
     setGenerating(true)
@@ -180,6 +184,26 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
     setTaskDetail(null)
   }
 
+  const markSuccess = async (idea: Record<string, unknown>) => {
+    const ideaId = idea.id as string
+    if (feedbackSent.has(ideaId)) return
+    try {
+      await fetch(`/api/clients/${clientId}/brain/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idea_id: ideaId,
+          concept: idea.concept,
+          angle: idea.angle,
+          content_type: idea.content_type,
+        }),
+      })
+      setFeedbackSent((prev) => new Set([...prev, ideaId]))
+    } catch {
+      // silent — non-critical
+    }
+  }
+
   const filtered = ideas.filter((i) => i.status === activeStatus)
 
   return (
@@ -203,14 +227,22 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
           })}
         </div>
 
-        <button
-          onClick={generate}
-          disabled={generating || !brandBrainCompleted}
-          title={!brandBrainCompleted ? 'Completa el Brand Brain antes de generar ideas' : undefined}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
-        >
-          {generating ? 'Generando…' : '✦ Generar plan semanal'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAddIdea(true)}
+            className="rounded-md border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"
+          >
+            + Añadir idea
+          </button>
+          <button
+            onClick={generate}
+            disabled={generating || !brandBrainCompleted}
+            title={!brandBrainCompleted ? 'Completa el Brand Brain antes de generar ideas' : undefined}
+            className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            {generating ? 'Generando…' : '✦ Generar plan semanal'}
+          </button>
+        </div>
       </div>
 
       {!brandBrainCompleted && (
@@ -267,12 +299,41 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
               </div>
             )}
 
-            {activeStatus !== 'suggested' && (
+            {activeStatus === 'published' && (
+              <div className="mt-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                <p className="text-[10px] text-brand font-medium">Ver detalle →</p>
+                <button
+                  onClick={() => markSuccess(idea)}
+                  title="Marcar como contenido que funcionó bien para aprender de él"
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors',
+                    feedbackSent.has(idea.id as string)
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'border border-ink-200 text-ink-400 hover:border-yellow-400 hover:text-yellow-600'
+                  )}
+                >
+                  {feedbackSent.has(idea.id as string) ? '⭐ Aprendido' : '⭐ Funcionó bien'}
+                </button>
+              </div>
+            )}
+            {activeStatus !== 'suggested' && activeStatus !== 'published' && (
               <p className="mt-3 text-[10px] text-brand font-medium">Ver detalle →</p>
             )}
           </div>
         ))}
       </div>
+
+      {/* Add idea modal */}
+      {showAddIdea && (
+        <AddIdeaModal
+          clientId={clientId}
+          onClose={() => setShowAddIdea(false)}
+          onCreated={(idea) => {
+            setIdeas((prev) => [idea, ...prev])
+            setActiveStatus('suggested')
+          }}
+        />
+      )}
 
       {/* Detail drawer */}
       {selectedIdea && (
@@ -295,6 +356,19 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                   {selectedIdea.concept as string}
                 </h2>
               </div>
+              {selectedIdea.status === 'published' && (
+                <button
+                  onClick={() => markSuccess(selectedIdea)}
+                  className={cn(
+                    'flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    feedbackSent.has(selectedIdea.id as string)
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'border border-ink-200 text-ink-500 hover:border-yellow-400 hover:text-yellow-600'
+                  )}
+                >
+                  {feedbackSent.has(selectedIdea.id as string) ? '⭐ Aprendido' : '⭐ Funcionó bien'}
+                </button>
+              )}
               <button
                 onClick={closeDetail}
                 className="flex-shrink-0 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700"

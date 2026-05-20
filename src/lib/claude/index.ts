@@ -15,6 +15,7 @@ export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
   const learning = (brandBrain.performance_learning as Record<string, unknown>) ?? {}
   const recentIdeas = (learning.recent_ideas as Array<Record<string, string>>) ?? []
   const topPerforming = (learning.top_performing as Record<string, string>) ?? {}
+  const highlights = (learning.highlights as Array<Record<string, string>>) ?? []
 
   return `Eres el experto en contenido de ${id.business_name ?? 'este negocio'}.
 
@@ -53,8 +54,9 @@ ${recentIdeas
   .join('\n')}
 
 QUÉ FUNCIONA MEJOR:
-${topPerforming.best_content_type ?? 'Por determinar'}
-Mejor formato: ${topPerforming.best_format ?? 'Por determinar'}
+Tipo de contenido: ${topPerforming.best_content_type ?? 'Por determinar'}
+Ángulo ganador: ${topPerforming.best_format ?? 'Por determinar'}
+${highlights.length > 0 ? `\nCONTENIDO QUE YA HA FUNCIONADO BIEN (prioriza estos patrones):\n${highlights.slice(0, 8).map((h) => `- [${h.content_type}/${h.angle}] ${h.concept}`).join('\n')}` : ''}
 
 Genera contenido que suene exactamente como ${id.business_name ?? 'este negocio'}.
 Nunca genérico. Nunca repetido. Siempre con intención clara.`
