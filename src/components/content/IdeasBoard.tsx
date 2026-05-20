@@ -299,7 +299,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
               </div>
             )}
 
-            {activeStatus === 'published' && (
+            {activeStatus === 'published' ? (
               <div className="mt-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                 <p className="text-[10px] text-brand font-medium">Ver detalle →</p>
                 <button
@@ -315,8 +315,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
                   {feedbackSent.has(idea.id as string) ? '⭐ Aprendido' : '⭐ Funcionó bien'}
                 </button>
               </div>
-            )}
-            {activeStatus !== 'suggested' && activeStatus !== 'published' && (
+            ) : activeStatus === 'suggested' ? (
+              <p className="mt-3 text-[10px] text-ink-400">Toca para ver descripción completa</p>
+            ) : (
               <p className="mt-3 text-[10px] text-brand font-medium">Ver detalle →</p>
             )}
           </div>
