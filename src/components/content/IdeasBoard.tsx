@@ -33,6 +33,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   const [ideas, setIdeas] = useState(initialIdeas)
   const [generating, setGenerating] = useState(false)
   const [activeStatus, setActiveStatus] = useState<string>('suggested')
+  const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const generate = async () => {
     setGenerating(true)
@@ -53,13 +54,29 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
   }
 
   const approve = async (ideaId: string) => {
-    await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
-    setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'approved' } : i))
+    if (loadingId) return
+    setLoadingId(ideaId)
+    try {
+      const res = await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'approved' } : i))
+      setActiveStatus('approved')
+    } catch (err) {
+      alert(`Error aprobando idea: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setLoadingId(null)
+    }
   }
 
   const discard = async (ideaId: string) => {
-    await fetch(`/api/ideas/${ideaId}/discard`, { method: 'POST' })
-    setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'discarded' } : i))
+    if (loadingId) return
+    setLoadingId(ideaId)
+    try {
+      await fetch(`/api/ideas/${ideaId}/discard`, { method: 'POST' })
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'discarded' } : i))
+    } finally {
+      setLoadingId(null)
+    }
   }
 
   const filtered = ideas.filter((i) => i.status === activeStatus)
@@ -131,13 +148,15 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted }: Prop
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => approve(idea.id as string)}
-                  className="flex-1 rounded bg-ink-900 py-1.5 text-xs font-medium text-white hover:bg-ink-800"
+                  disabled={loadingId === idea.id as string}
+                  className="flex-1 rounded bg-ink-900 py-1.5 text-xs font-medium text-white hover:bg-ink-800 disabled:opacity-50"
                 >
-                  Aprobar
+                  {loadingId === idea.id as string ? 'Generando brief…' : 'Aprobar'}
                 </button>
                 <button
                   onClick={() => discard(idea.id as string)}
-                  className="rounded border border-ink-200 px-3 py-1.5 text-xs text-ink-500 hover:bg-ink-50"
+                  disabled={!!loadingId}
+                  className="rounded border border-ink-200 px-3 py-1.5 text-xs text-ink-500 hover:bg-ink-50 disabled:opacity-40"
                 >
                   Descartar
                 </button>
