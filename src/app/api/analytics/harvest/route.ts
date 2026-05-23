@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getPostInsights, getIGFollowerCount } from '@/lib/meta/analytics'
+import { detectAndMarkWinners } from '@/lib/winning-patterns/detect'
 
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-webhook-secret')
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
   if (!clients?.length) return NextResponse.json({ harvested: 0 })
 
   let harvested = 0
+  const winners: Array<{ client_id: string; winners_marked: number; patterns_created: number }> = []
   for (const client of clients) {
     const token = client.meta_system_user_token
     if (!token || !client.meta_business_id) continue
@@ -63,7 +65,20 @@ export async function POST(request: NextRequest) {
           .eq('id', client.id)
       }
     }
+
+    try {
+      const result = await detectAndMarkWinners(supabase, client.id)
+      if (result.winners_marked > 0) {
+        winners.push({
+          client_id: client.id,
+          winners_marked: result.winners_marked,
+          patterns_created: result.patterns_created,
+        })
+      }
+    } catch (err) {
+      console.error('detectAndMarkWinners failed for client', client.id, err)
+    }
   }
 
-  return NextResponse.json({ harvested })
+  return NextResponse.json({ harvested, winners })
 }

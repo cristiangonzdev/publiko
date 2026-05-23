@@ -127,6 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       copy: chosen.copy,
       hashtags: chosen.hashtags,
       cta: chosen.cta ?? undefined,
+      kind: idea.content_type === 'story' ? 'story' : 'feed',
     })
   } catch (err) {
     verdict = {

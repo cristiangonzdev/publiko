@@ -70,6 +70,12 @@ export default async function ClientDetailPage({ params }: Props) {
             Brand Brain {brain?.onboarding_completed ? '✓' : `(paso ${brain?.onboarding_step ?? 0}/6)`}
           </Link>
           <Link
+            href={`/admin/clients/${id}/patterns`}
+            className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
+          >
+            ⭐ Patrones
+          </Link>
+          <Link
             href={`/admin/clients/${id}/ideas`}
             className="rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
           >

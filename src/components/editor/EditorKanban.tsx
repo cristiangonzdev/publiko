@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
+import { detectAspectRatio } from '@/lib/upload/aspect-ratio'
 import { BrollsPanel } from './BrollsPanel'
 
 const COLS = [
@@ -36,6 +37,7 @@ interface Task {
   client_name?: string
   status: string
   deadline: string | null
+  content_type?: string | null
   copy_selected: string | null
   editing_brief: Record<string, unknown> | null
   final_asset_id: string | null
@@ -88,6 +90,23 @@ export function EditorKanban({ initialTasks }: Props) {
     const file = e.target.files?.[0]
     const taskId = uploadingTask.current
     if (!file || !taskId) return
+
+    const task = tasks.find((t) => t.id === taskId)
+    if (task?.content_type === 'story') {
+      const info = await detectAspectRatio(file)
+      if (info && !info.isPortrait916) {
+        const proceed = window.confirm(
+          `⚠️ Esta tarea es una STORY pero el archivo es ${info.label}.\n` +
+          `Las stories de IG/FB requieren formato vertical 9:16 — el contenido se recortará o aparecerá con bandas.\n\n` +
+          `¿Subir igualmente?`
+        )
+        if (!proceed) {
+          uploadingTask.current = null
+          if (fileRef.current) fileRef.current.value = ''
+          return
+        }
+      }
+    }
 
     setUploading(taskId)
     try {

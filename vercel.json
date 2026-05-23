@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/daily-generation",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/publish-retry",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/reviews-harvest",
+      "schedule": "0 * * * *"
     }
   ]
 }

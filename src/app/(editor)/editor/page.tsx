@@ -8,7 +8,7 @@ export default async function EditorPage() {
 
   const { data: tasks } = await supabase
     .from('content_tasks')
-    .select('id, title, status, deadline, client_id, copy_selected, editing_brief, final_asset_id, clients!inner(business_name)')
+    .select('id, title, status, deadline, client_id, content_type, copy_selected, editing_brief, final_asset_id, clients!inner(business_name)')
     .eq('editor_id', user.id)
     .not('status', 'in', '("published","cancelled")')
     .order('deadline', { ascending: true })
@@ -20,6 +20,7 @@ export default async function EditorPage() {
     client_name: (t.clients as unknown as { business_name: string })?.business_name ?? '',
     status: t.status,
     deadline: t.deadline,
+    content_type: t.content_type,
     copy_selected: t.copy_selected,
     editing_brief: t.editing_brief as Record<string, unknown> | null,
     final_asset_id: t.final_asset_id,

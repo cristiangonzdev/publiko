@@ -223,6 +223,7 @@ export default async function AdminDashboardPage() {
       {/* Accesos rápidos */}
       <div className="mt-6 flex flex-wrap gap-2">
         {[
+          { href: '/admin/atascado', label: '🚨 Qué está atascado' },
           { href: '/admin/clients/new', label: '+ Nuevo cliente' },
           { href: '/admin/ideas', label: 'Ideas pendientes' },
           { href: '/admin/review', label: 'Revisión entregables' },

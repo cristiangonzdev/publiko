@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generateDailyBatch, type DailyGenerationConfig } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
+import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
     try {
       const cfg = c.daily_generation_config as DailyGenerationConfig
 
-      const [{ data: brain }, { data: recent }] = await Promise.all([
+      const [{ data: brain }, { data: recent }, winningPatterns] = await Promise.all([
         service.from('brand_brains').select('*').eq('client_id', c.id).single(),
         service
           .from('content_ideas')
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
           .eq('client_id', c.id)
           .order('created_at', { ascending: false })
           .limit(50),
+        loadWinningPatterns(service, c.id),
       ])
 
       if (!brain?.onboarding_completed) {
@@ -65,8 +67,13 @@ export async function GET(request: Request) {
         return
       }
 
-      const batch = await generateDailyBatch(
+      const brainWithPatterns = attachWinningPatterns(
         brain as unknown as Record<string, unknown>,
+        winningPatterns,
+      )
+
+      const batch = await generateDailyBatch(
+        brainWithPatterns,
         (recent ?? []) as unknown as Array<Record<string, unknown>>,
         cfg,
         dateLabel,

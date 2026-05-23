@@ -6,6 +6,44 @@ function stripMarkdown(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
 }
 
+export interface WinningPatternForPrompt {
+  source: 'auto' | 'manual' | 'hybrid'
+  features: {
+    content_type?: string | null
+    angle?: string | null
+    platform?: string | null
+    hook?: string | null
+    concept_summary?: string | null
+    publish_hour?: string | null
+    weekday?: string | null
+    has_cta?: boolean | null
+    copy_excerpt?: string | null
+  }
+  reason: string | null
+  impact_multiplier: number | null
+  metrics: { engagement_rate?: number | null; reach?: number | null }
+  days_ago: number
+}
+
+function formatWinningPatterns(patterns: WinningPatternForPrompt[]): string {
+  if (patterns.length === 0) return ''
+
+  const lines = patterns.map((p, i) => {
+    const f = p.features ?? {}
+    const parts: string[] = []
+    parts.push(`${i + 1}. [${f.content_type ?? '?'} · ${f.angle ?? '?'}${f.platform ? ' · ' + f.platform : ''}]`)
+    if (f.hook) parts.push(`  Gancho que funcionó: "${f.hook}"`)
+    if (f.concept_summary) parts.push(`  Concepto: ${f.concept_summary}`)
+    if (f.publish_hour || f.weekday) parts.push(`  Cuándo: ${f.weekday ?? ''} ${f.publish_hour ? f.publish_hour + 'h' : ''}`.trim())
+    if (p.reason) parts.push(`  Por qué funcionó (admin): ${p.reason}`)
+    if (p.impact_multiplier) parts.push(`  Impacto: ×${p.impact_multiplier.toFixed(1)} sobre baseline · hace ${p.days_ago}d`)
+    else parts.push(`  Origen: ${p.source} · hace ${p.days_ago}d`)
+    return parts.join('\n')
+  })
+
+  return `\nPATRONES QUE HAN FUNCIONADO PARA ESTE CLIENTE (úsalos como inspiración, NO los clones literalmente):\n${lines.join('\n\n')}\n\nReglas al usar estos patrones:\n- INSPÍRATE en el gancho, el ángulo y el formato, NUNCA copies el copy literal\n- Si un patrón es de hace menos de 7 días, EVITA repetir el mismo concept_summary\n- Si varios patrones comparten ángulo/formato, ese es el camino fuerte\n- Si el admin escribió "Por qué funcionó", esa es la señal más importante\n`
+}
+
 export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
   const id = (brandBrain.identity as Record<string, string>) ?? {}
   const audience = (brandBrain.audience as Record<string, unknown>) ?? {}
@@ -16,6 +54,7 @@ export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
   const recentIdeas = (learning.recent_ideas as Array<Record<string, string>>) ?? []
   const topPerforming = (learning.top_performing as Record<string, string>) ?? {}
   const highlights = (learning.highlights as Array<Record<string, string>>) ?? []
+  const winningPatterns = (learning.winning_patterns as WinningPatternForPrompt[]) ?? []
 
   return `Eres el experto en contenido de ${id.business_name ?? 'este negocio'}.
 
@@ -57,7 +96,7 @@ QUÉ FUNCIONA MEJOR:
 Tipo de contenido: ${topPerforming.best_content_type ?? 'Por determinar'}
 Ángulo ganador: ${topPerforming.best_format ?? 'Por determinar'}
 ${highlights.length > 0 ? `\nCONTENIDO QUE YA HA FUNCIONADO BIEN (prioriza estos patrones):\n${highlights.slice(0, 8).map((h) => `- [${h.content_type}/${h.angle}] ${h.concept}`).join('\n')}` : ''}
-
+${formatWinningPatterns(winningPatterns)}
 Genera contenido que suene exactamente como ${id.business_name ?? 'este negocio'}.
 Nunca genérico. Nunca repetido. Siempre con intención clara.`
 }
@@ -331,10 +370,33 @@ export async function judgeContent(
     copy: string
     hashtags?: string[]
     cta?: string
+    kind?: 'feed' | 'story'
   },
 ): Promise<JudgeVerdict> {
   const voice = (brandBrain.voice as Record<string, unknown>) ?? {}
   const forbidden = ((voice.forbidden_words as string[]) ?? []).concat((voice.forbidden_topics as string[]) ?? [])
+  const kind = payload.kind ?? (payload.content_type === 'story' ? 'story' : 'feed')
+
+  const storyRules = `
+CRITERIOS ESPECÍFICOS PARA STORIES (más permisivos que feed):
+- Tono coloquial y cercano OK — las stories son más informales que el feed
+- Copy MUY corto (≤ 80 caracteres ideal, máx 150). Si el copy es largo, rechaza.
+- Hashtags: 0 ideal, máx 2. Más hashtags = spam en story → rechaza.
+- CTA opcional (las stories tienen stickers de respuesta nativos)
+- Emojis OK con moderación
+- NUNCA aprobar stories con: precios concretos, promesas legales, descuentos sin verificar, anuncios de horario sin confirmar
+- IG ignora la caption de stories de todas formas — si el copy aporta información esencial al post, debería ser feed, no story → rechaza`
+
+  const feedRules = `
+CRITERIOS DE RECHAZO (cualquiera basta):
+- Faltas de ortografía o gramaticales claras
+- Tono fuera de marca (genérico, robótico, demasiado formal o informal)
+- Uso de palabras/temas prohibidos
+- CTA confuso, ambiguo o ausente cuando hace falta
+- Hashtags spam, repetidos o irrelevantes
+- Contenido sensible (precios concretos, promesas legales, salud, política, religión) que necesita revisión humana
+- Mención de cantidades, fechas o datos sin verificar
+- Errores tipográficos o emojis fuera de estilo`
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -345,16 +407,9 @@ Marca: ${((brandBrain.identity as Record<string, string>) ?? {}).business_name ?
 Voz: ${((voice.personality_traits as string[]) ?? []).join(', ')}
 Anti-tono: ${voice.anti_tone ?? ''}
 Palabras/temas prohibidos: ${forbidden.join(', ') || 'ninguno'}
+Tipo de pieza: ${kind === 'story' ? 'STORY (efímera, 24h)' : 'FEED (permanente)'}
 
-CRITERIOS DE RECHAZO (cualquiera basta):
-- Faltas de ortografía o gramaticales claras
-- Tono fuera de marca (genérico, robótico, demasiado formal o informal)
-- Uso de palabras/temas prohibidos
-- CTA confuso, ambiguo o ausente cuando hace falta
-- Hashtags spam, repetidos o irrelevantes
-- Contenido sensible (precios concretos, promesas legales, salud, política, religión) que necesita revisión humana
-- Mención de cantidades, fechas o datos sin verificar
-- Errores tipográficos o emojis fuera de estilo
+${kind === 'story' ? storyRules : feedRules}
 
 Si TODO está bien y se puede publicar sin intervención: passes=true.
 Si HAY UN solo problema: passes=false e indica los issues concretos.`,

@@ -1,0 +1,136 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+
+interface MarkWinnerBody {
+  reason?: string
+  features_override?: Record<string, unknown>
+}
+
+function extractHook(copy: string): string {
+  const cleaned = copy
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/#\w+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned.split(/\s+/).slice(0, 5).join(' ')
+}
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Solo admin puede marcar ganadores' }, { status: 403 })
+  }
+
+  const body = (await request.json().catch(() => ({}))) as MarkWinnerBody
+  const reason = body.reason?.trim()
+  if (!reason || reason.length < 5) {
+    return NextResponse.json({ error: 'Explica brevemente por qué funcionó (mín 5 caracteres)' }, { status: 400 })
+  }
+
+  const service = await createServiceClient()
+
+  interface PostForWinner {
+    id: string
+    client_id: string
+    task_id: string | null
+    platform: string
+    copy: string
+    published_at: string | null
+    reach: number | null
+    impressions: number | null
+    likes: number | null
+    comments: number | null
+    shares: number | null
+    saves: number | null
+    engagement_rate: number | null
+    is_winner: boolean
+    winner_source: string | null
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: post } = await (service.from('posts') as any)
+    .select('id, client_id, task_id, platform, copy, hashtags, published_at, reach, impressions, likes, comments, shares, saves, engagement_rate, is_winner, winner_source')
+    .eq('id', id)
+    .single() as { data: PostForWinner | null }
+
+  if (!post) return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
+
+  let contentType: string | null = null
+  let angle: string | null = null
+  let conceptSummary: string | null = null
+  if (post.task_id) {
+    interface TaskRow { content_type: string | null; angle: string | null; concept: string | null }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: task } = await (service.from('content_tasks') as any)
+      .select('content_type, angle, concept')
+      .eq('id', post.task_id)
+      .single() as { data: TaskRow | null }
+    contentType = task?.content_type ?? null
+    angle = task?.angle ?? null
+    conceptSummary = task?.concept ?? null
+  }
+
+  const publishDate = post.published_at ? new Date(post.published_at) : null
+  const features = {
+    content_type: contentType,
+    angle,
+    platform: post.platform,
+    hook: extractHook(post.copy ?? ''),
+    concept_summary: conceptSummary,
+    publish_hour: publishDate ? String(publishDate.getHours()).padStart(2, '0') : null,
+    weekday: publishDate
+      ? ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][publishDate.getDay()]
+      : null,
+    copy_excerpt: (post.copy ?? '').slice(0, 280),
+    ...(body.features_override ?? {}),
+  }
+
+  const metricsSnapshot = {
+    reach: post.reach,
+    impressions: post.impressions,
+    likes: post.likes,
+    comments: post.comments,
+    shares: post.shares,
+    saves: post.saves,
+    engagement_rate: post.engagement_rate,
+  }
+
+  const finalSource = post.is_winner && post.winner_source === 'auto' ? 'hybrid' : 'manual'
+
+  const { error: postErr } = await service
+    .from('posts')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({
+      is_winner: true,
+      winner_source: finalSource,
+      winner_marked_at: new Date().toISOString(),
+    } as any)
+    .eq('id', id)
+
+  if (postErr) return NextResponse.json({ error: postErr.message }, { status: 500 })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pattern, error: patternErr } = await (service.from('winning_patterns') as any)
+    .insert({
+      client_id: post.client_id,
+      post_id: post.id,
+      source: finalSource,
+      features,
+      manual_reason: reason,
+      metrics_snapshot: metricsSnapshot,
+      marked_by: user.id,
+      active: true,
+    })
+    .select('id')
+    .single() as { data: { id: string } | null; error: { message: string } | null }
+
+  if (patternErr) return NextResponse.json({ error: patternErr.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true, pattern_id: pattern?.id })
+}

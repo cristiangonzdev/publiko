@@ -35,4 +35,10 @@ export const TG = {
 
   falloPub: (businessName: string, concept: string, reason: string) =>
     `❌ <b>FALLO publicación</b>\n\n${businessName} — ${concept}\nError: ${reason}`,
+
+  reintento: (businessName: string, concept: string, attempt: number, nextInMin: number, reason: string) =>
+    `⚠️ <b>Publicación falló (intento ${attempt}/3)</b>\n\n${businessName} — ${concept}\nError: ${reason}\nReintento en ${nextInMin} min`,
+
+  falloDefinitivo: (businessName: string, concept: string, reason: string, postUrl?: string) =>
+    `🚨 <b>PUBLICACIÓN ABORTADA tras 3 intentos</b>\n\n${businessName} — ${concept}\nError: ${reason}${postUrl ? `\n\n${postUrl}` : ''}\n\nRequiere intervención manual.`,
 }

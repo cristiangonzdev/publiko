@@ -31,6 +31,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       copy: task.copy_selected,
       hashtags: (task.hashtags as string[]) ?? [],
       cta: task.cta ?? undefined,
+      kind: task.content_type === 'story' ? 'story' : 'feed',
     })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })

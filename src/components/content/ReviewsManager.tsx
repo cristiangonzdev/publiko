@@ -15,6 +15,8 @@ interface Review {
   response_selected: string | null
   status: string
   sentiment: string | null
+  ai_draft?: string | null
+  ai_draft_at?: string | null
 }
 
 interface Props {
@@ -91,8 +93,26 @@ export function ReviewsManager({ initialReviews }: Props) {
             )}
 
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-semibold text-ink-500">Opciones de respuesta generadas por IA:</p>
-              {review.response_options.map((opt, i) => (
+              {review.ai_draft && (
+                <div className="rounded-lg border-2 border-brand bg-brand/5 p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-brand">⭐ Borrador IA recomendado</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustom((prev) => ({ ...prev, [review.id]: review.ai_draft ?? '' }))
+                        setSelected((prev) => ({ ...prev, [review.id]: '' }))
+                      }}
+                      className="text-[10px] text-brand hover:underline"
+                    >
+                      Editar →
+                    </button>
+                  </div>
+                  <p className="text-sm text-ink-800">{review.ai_draft}</p>
+                </div>
+              )}
+              <p className="text-xs font-semibold text-ink-500">{review.ai_draft ? 'Otras opciones:' : 'Opciones de respuesta generadas por IA:'}</p>
+              {review.response_options.filter((opt) => opt !== review.ai_draft).map((opt, i) => (
                 <label key={i} className={cn(
                   'flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-sm transition-colors',
                   selected[review.id] === opt ? 'border-brand bg-brand/5' : 'border-ink-100 hover:border-ink-300'

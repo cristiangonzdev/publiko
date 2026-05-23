@@ -4,14 +4,31 @@ import { ReviewsManager } from '@/components/content/ReviewsManager'
 export default async function ReviewsPage() {
   const supabase = await createClient()
 
-  const { data: reviews } = await supabase
-    .from('reviews')
-    .select('id, client_id, source, author_name, rating, text, review_date, response_options, response_selected, status, sentiment')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: reviews } = await (supabase.from('reviews') as any)
+    .select('id, client_id, source, author_name, rating, text, review_date, response_options, response_selected, status, sentiment, ai_draft, ai_draft_at')
     .in('status', ['pending', 'needs_response'])
     .order('review_date', { ascending: false })
     .limit(50)
 
-  const clientIds = [...new Set((reviews ?? []).map((r) => r.client_id))]
+  interface ReviewRow {
+    id: string
+    client_id: string
+    source: string
+    author_name: string | null
+    rating: number | null
+    text: string | null
+    review_date: string | null
+    response_options: string[] | null
+    response_selected: string | null
+    status: string
+    sentiment: string | null
+    ai_draft: string | null
+    ai_draft_at: string | null
+  }
+  const rows: ReviewRow[] = (reviews ?? []) as ReviewRow[]
+
+  const clientIds = [...new Set(rows.map((r) => r.client_id))]
   const { data: clients } = await supabase
     .from('clients')
     .select('id, business_name')
@@ -19,10 +36,10 @@ export default async function ReviewsPage() {
 
   const clientMap = Object.fromEntries((clients ?? []).map((c) => [c.id, c.business_name]))
 
-  const items = (reviews ?? []).map((r) => ({
+  const items = rows.map((r) => ({
     ...r,
     business_name: clientMap[r.client_id] ?? r.client_id,
-    response_options: (r.response_options as string[]) ?? [],
+    response_options: r.response_options ?? [],
   }))
 
   return (

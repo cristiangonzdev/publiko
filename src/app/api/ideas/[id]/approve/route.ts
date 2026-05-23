@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateCopyOptions, generateBriefs } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
+import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,11 +21,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   if (!idea) return NextResponse.json({ error: 'Idea not found' }, { status: 404 })
 
-  const { data: brain } = await service
-    .from('brand_brains')
-    .select('*')
-    .eq('client_id', idea.client_id)
-    .single()
+  const [{ data: brain }, winningPatterns] = await Promise.all([
+    service
+      .from('brand_brains')
+      .select('*')
+      .eq('client_id', idea.client_id)
+      .single(),
+    loadWinningPatterns(service, idea.client_id as string),
+  ])
 
   await service
     .from('content_ideas')
@@ -33,7 +37,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const ideaRecord = idea as unknown as Record<string, unknown>
-    const brainRecord = (brain ?? {}) as unknown as Record<string, unknown>
+    const brainRecord = attachWinningPatterns(
+      (brain ?? {}) as unknown as Record<string, unknown>,
+      winningPatterns,
+    )
 
     const [copyOptions, briefs] = await Promise.all([
       generateCopyOptions(brainRecord, ideaRecord),
