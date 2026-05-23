@@ -22,6 +22,8 @@ const adminNav: NavItem[] = [
   { href: '/admin/calendar', label: 'Calendario', icon: '▦' },
   { href: '/admin/reports', label: 'Informes', icon: '▤' },
   { href: '/admin/invoices', label: 'Facturación', icon: '▧' },
+  { href: '/admin/atascado', label: 'Atascado', icon: '⚠' },
+  { href: '/admin/users', label: 'Usuarios', icon: '◑' },
 ]
 
 const editorNav: NavItem[] = [

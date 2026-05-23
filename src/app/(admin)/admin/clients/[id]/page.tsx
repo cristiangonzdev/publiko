@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BrollsManager } from '@/components/admin/BrollsManager'
 import { GenerationConfigPanel } from '@/components/admin/GenerationConfigPanel'
+import { DeleteClientButton } from '@/components/admin/DeleteClientButton'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -62,7 +63,13 @@ export default async function ClientDetailPage({ params }: Props) {
             <span className="text-sm text-ink-500">{client.monthly_fee ? `${client.monthly_fee} €/mes` : '—'}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/clients/${id}/edit`}
+            className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
+          >
+            Editar
+          </Link>
           <Link
             href={`/admin/clients/${id}/brand-brain`}
             className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
@@ -81,6 +88,7 @@ export default async function ClientDetailPage({ params }: Props) {
           >
             Ideas →
           </Link>
+          <DeleteClientButton clientId={id} clientName={client.business_name} />
         </div>
       </div>
 
