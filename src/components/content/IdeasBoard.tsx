@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { AddIdeaModal } from './AddIdeaModal'
@@ -157,6 +157,34 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const [togglingTier, setTogglingTier] = useState(false)
   const [runningJudge, setRunningJudge] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+  }, [])
+
+  // Poll every 3s while task exists but briefs are still being generated
+  useEffect(() => {
+    if (!taskDetail || taskDetail.recording_brief != null) {
+      stopPolling()
+      return
+    }
+    if (!selectedIdea) return
+    const ideaId = selectedIdea.id as string
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ideas/${ideaId}/detail`)
+        if (res.ok) {
+          const { task } = await res.json() as { task: TaskDetail | null }
+          if (task?.recording_brief != null) setTaskDetail(task)
+        }
+      } catch { /* silent */ }
+    }, 3000)
+    return stopPolling
+  }, [taskDetail, selectedIdea, stopPolling])
 
   const toggleApprovalTier = async () => {
     if (!taskDetail) return
@@ -221,8 +249,11 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     try {
       const res = await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
-      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'approved' } : i))
+      const original = ideas.find((i) => i.id === ideaId)
+      const updated = { ...(original ?? {}), id: ideaId, status: 'approved' }
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? updated : i))
       setActiveStatus('approved')
+      void openDetail(updated)
     } catch (err) {
       alert(`Error aprobando idea: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -263,6 +294,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   }
 
   const closeDetail = () => {
+    stopPolling()
     setSelectedIdea(null)
     setTaskDetail(null)
     setGrabadorPick('')
@@ -480,7 +512,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                   disabled={loadingId === idea.id as string}
                   className="flex-1 rounded bg-ink-900 py-1.5 text-xs font-medium text-white hover:bg-ink-800 disabled:opacity-50"
                 >
-                  {loadingId === idea.id as string ? 'Generando brief…' : 'Aprobar'}
+                  {loadingId === idea.id as string ? 'Aprobando…' : 'Aprobar'}
                 </button>
                 <button
                   onClick={() => discard(idea.id as string)}
@@ -596,6 +628,28 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
               {/* Loading task */}
               {loadingDetail && (
                 <div className="py-6 text-center text-sm text-ink-400">Cargando briefs…</div>
+              )}
+
+              {/* Briefs generating skeleton */}
+              {taskDetail && taskDetail.recording_brief == null && (
+                <>
+                  <Section title="Brief de grabación">
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                      <div className="h-3.5 rounded bg-ink-100 w-3/5" />
+                    </div>
+                    <p className="mt-3 text-xs text-ink-400">Claude está generando el brief…</p>
+                  </Section>
+                  <Section title="Brief de edición">
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                    </div>
+                  </Section>
+                </>
               )}
 
               {/* Recording brief */}

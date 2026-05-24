@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateCopyOptions, generateBriefs } from '@/lib/claude'
@@ -35,45 +36,59 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: user.id })
     .eq('id', id)
 
-  try {
-    const ideaRecord = idea as unknown as Record<string, unknown>
-    const brainRecord = attachWinningPatterns(
-      (brain ?? {}) as unknown as Record<string, unknown>,
-      winningPatterns,
-    )
+  // Create task immediately with nulls so the drawer can open right away
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: task } = await service
+    .from('content_tasks')
+    .insert({
+      client_id: idea.client_id,
+      idea_id: id,
+      title: idea.concept,
+      content_type: idea.content_type,
+      copy_options: null,
+      recording_brief: null,
+      editing_brief: null,
+      target_platforms: [],
+      status: 'approved_idea',
+    } as any)
+    .select('id')
+    .single()
 
-    const [copyOptions, briefs] = await Promise.all([
-      generateCopyOptions(brainRecord, ideaRecord),
-      generateBriefs(brainRecord, ideaRecord),
-    ])
+  await service
+    .from('content_ideas')
+    .update({ content_task_id: task?.id ?? null })
+    .eq('id', id)
 
-    const { data: task } = await service
-      .from('content_tasks')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert({
-        client_id: idea.client_id,
-        idea_id: id,
-        title: idea.concept,
-        content_type: idea.content_type,
-        copy_options: copyOptions,
-        recording_brief: briefs.recording_brief,
-        editing_brief: briefs.editing_brief,
-        target_platforms: [],
-        status: 'approved_idea',
-      } as any)
-      .select('id')
-      .single()
+  // Generate briefs after the response is sent — user sees the drawer immediately
+  after(async () => {
+    if (!task?.id) return
+    try {
+      const ideaRecord = idea as unknown as Record<string, unknown>
+      const brainRecord = attachWinningPatterns(
+        (brain ?? {}) as unknown as Record<string, unknown>,
+        winningPatterns,
+      )
 
-    await service
-      .from('content_ideas')
-      .update({ content_task_id: task?.id ?? null })
-      .eq('id', id)
+      const [copyOptions, briefs] = await Promise.all([
+        generateCopyOptions(brainRecord, ideaRecord),
+        generateBriefs(brainRecord, ideaRecord),
+      ])
 
-    const businessName = (idea.clients as unknown as { business_name: string })?.business_name ?? ''
-    await notifyAdmin(`✅ <b>Idea aprobada</b>\n\n${businessName}\n${idea.concept}\n\nTarea de producción creada.`)
+      await service
+        .from('content_tasks')
+        .update({
+          copy_options: copyOptions,
+          recording_brief: briefs.recording_brief,
+          editing_brief: briefs.editing_brief,
+        })
+        .eq('id', task.id)
 
-    return NextResponse.json({ ok: true, task_id: task?.id })
-  } catch {
-    return NextResponse.json({ ok: true, task_id: null })
-  }
+      const businessName = (idea.clients as unknown as { business_name: string })?.business_name ?? ''
+      await notifyAdmin(`✅ <b>Idea aprobada</b>\n\n${businessName}\n${idea.concept}\n\nTarea de producción creada.`)
+    } catch {
+      // Brief generation failed — task stays with null briefs, user can retry
+    }
+  })
+
+  return NextResponse.json({ ok: true, task_id: task?.id })
 }
