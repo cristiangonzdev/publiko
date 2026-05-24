@@ -76,10 +76,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
       await service
         .from('content_tasks')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .update({
-          copy_options: copyOptions,
-          recording_brief: briefs.recording_brief,
-          editing_brief: briefs.editing_brief,
+          copy_options: copyOptions as any,
+          recording_brief: briefs.recording_brief as any,
+          editing_brief: briefs.editing_brief as any,
         })
         .eq('id', task.id)
 
