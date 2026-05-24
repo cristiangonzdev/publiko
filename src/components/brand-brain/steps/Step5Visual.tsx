@@ -38,9 +38,28 @@ export function Step5Visual({ initialData, onSave }: Props) {
         <TextInput label="Color secundario" placeholder="#C9A84C o Dorado" value={colors.secondary as string ?? ''} onChange={(v) => update('colors', { ...colors, secondary: v })} />
       </FieldRow>
       <FieldRow>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-ink-700">Color acento</label>
+          <p className="mb-2 text-[11px] text-ink-400">Se usa en textos superpuestos, CTAs y elementos destacados del vídeo</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={(colors.accent as string)?.startsWith('#') ? colors.accent as string : '#000000'}
+              onChange={(e) => update('colors', { ...colors, accent: e.target.value })}
+              className="h-10 w-14 cursor-pointer rounded-md border border-ink-200 p-0.5"
+            />
+            <input
+              type="text"
+              placeholder="#FF4500 o Naranja vibrante"
+              value={colors.accent as string ?? ''}
+              onChange={(e) => update('colors', { ...colors, accent: e.target.value })}
+              className="flex-1 rounded-md border border-ink-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+            />
+          </div>
+        </div>
         <TextInput label="Color de fondo" placeholder="Tonos oscuros y tierra" value={colors.background as string ?? ''} onChange={(v) => update('colors', { ...colors, background: v })} />
-        <TagsInput label="Colores a evitar" placeholder="Neón, Azul brillante…" value={colors.avoid as string[] ?? []} onChange={(v) => update('colors', { ...colors, avoid: v })} />
       </FieldRow>
+      <TagsInput label="Colores a evitar" placeholder="Neón, Azul brillante…" value={colors.avoid as string[] ?? []} onChange={(v) => update('colors', { ...colors, avoid: v })} />
 
       <h3 className="text-sm font-semibold text-ink-700 pt-2">Fotografía</h3>
       <TextInput label="Mood / atmósfera" placeholder="Cálido, íntimo, con luz natural" value={photo.mood as string ?? ''} onChange={(v) => update('photo_style', { ...photo, mood: v })} />
