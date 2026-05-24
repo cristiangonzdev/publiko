@@ -10,7 +10,7 @@ export default async function GrabadorCalendarioPage() {
     .from('content_tasks')
     .select('id, title, status, deadline, client_id, content_type, clients!inner(business_name)')
     .eq('grabador_id', user.id)
-    .not('status', 'in', '("published","cancelled","brutos_ready")')
+    .not('status', 'in', '("published","brutos_ready")')
     .not('deadline', 'is', null)
     .order('deadline', { ascending: true })
 

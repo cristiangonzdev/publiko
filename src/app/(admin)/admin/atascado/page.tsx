@@ -105,7 +105,7 @@ export default async function AtascadoPage() {
     supabase
       .from('content_tasks')
       .select('id, client_id, title, content_type, status, deadline, grabador_id, editor_id, created_at, bruto_uploaded_at, delivered_at')
-      .not('status', 'in', '("published","cancelled")')
+      .not('status', 'in', '("published")')
       .lt('deadline', new Date().toISOString())
       .not('deadline', 'is', null)
       .order('deadline', { ascending: true })

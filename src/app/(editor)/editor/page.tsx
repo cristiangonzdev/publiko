@@ -11,7 +11,7 @@ export default async function EditorPage() {
     .from('content_tasks')
     .select('id, title, status, deadline, client_id, content_type, copy_selected, editing_brief, final_asset_id, clients!inner(business_name)')
     .eq('editor_id', user.id)
-    .not('status', 'in', '("published","cancelled")')
+    .not('status', 'in', '("published")')
     .order('deadline', { ascending: true })
 
   const kanbanTasks = (tasks ?? []).map((t) => ({

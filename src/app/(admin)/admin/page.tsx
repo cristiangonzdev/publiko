@@ -22,7 +22,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from('content_tasks')
       .select('id, title, client_id, status, deadline')
-      .not('status', 'in', '("published","cancelled","approved")')
+      .not('status', 'in', '("published","approved")')
       .lt('deadline', today)
       .not('deadline', 'is', null)
       .order('deadline', { ascending: true })

@@ -10,7 +10,7 @@ export default async function EditorCalendarioPage() {
     .from('content_tasks')
     .select('id, title, status, deadline, client_id, content_type, clients!inner(business_name)')
     .eq('editor_id', user.id)
-    .not('status', 'in', '("published","cancelled")')
+    .not('status', 'in', '("published")')
     .not('deadline', 'is', null)
     .order('deadline', { ascending: true })
 

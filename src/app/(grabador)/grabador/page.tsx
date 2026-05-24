@@ -12,7 +12,7 @@ export default async function GrabadorPage() {
     .from('content_tasks')
     .select('id, title, status, deadline, recording_brief, client_id')
     .eq('grabador_id', user.id)
-    .not('status', 'in', '("published","cancelled","delivered","approved")')
+    .not('status', 'in', '("published","delivered","approved","scheduled")')
     .order('deadline', { ascending: true })
 
   const clientIds = [...new Set((tasks ?? []).map((t) => t.client_id))]

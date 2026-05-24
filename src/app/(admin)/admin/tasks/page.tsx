@@ -8,7 +8,7 @@ export default async function AdminTasksPage() {
     supabase
       .from('content_tasks')
       .select('id, client_id, title, status, content_type, deadline, grabador_id, editor_id, target_platforms, publish_at')
-      .not('status', 'in', '("published","cancelled")')
+      .not('status', 'in', '("published")')
       .order('deadline', { ascending: true })
       .limit(100),
     supabase

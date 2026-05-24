@@ -31,7 +31,7 @@ export default async function ClientDetailPage({ params }: Props) {
         .from('content_tasks')
         .select('id, title, status, deadline')
         .eq('client_id', id)
-        .not('status', 'in', '("published","cancelled")')
+        .not('status', 'in', '("published")')
         .order('deadline', { ascending: true })
         .limit(5),
       supabase
