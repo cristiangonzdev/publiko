@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     .from('content_ideas')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .insert(allIdeas as any)
-    .select('id, concept, content_type, angle, content_origin, status')
+    .select('id, concept, full_description, content_type, angle, content_origin, status')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
