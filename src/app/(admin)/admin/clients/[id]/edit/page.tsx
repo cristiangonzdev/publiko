@@ -20,14 +20,18 @@ export default async function EditClientPage({ params, searchParams }: Props) {
 
   if (!client) notFound()
 
+  // Campos de integraciones que pueden no estar en los tipos generados aún
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clientAny = client as any
+
   async function updateClient(formData: FormData) {
     'use server'
     const svc = await createServiceClient()
 
     const getValue = (key: string) => (formData.get(key) as string | null) || null
 
-    const { error: updateError } = await svc
-      .from('clients')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (svc.from('clients') as any)
       .update({
         business_name: (formData.get('business_name') as string).trim(),
         contact_name: (formData.get('contact_name') as string).trim(),
@@ -44,6 +48,15 @@ export default async function EditClientPage({ params, searchParams }: Props) {
         contract_end: getValue('contract_end'),
         assigned_editor_id: getValue('assigned_editor_id'),
         assigned_grabador_id: getValue('assigned_grabador_id'),
+        meta_business_id: getValue('meta_business_id'),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        facebook_page_id: getValue('facebook_page_id'),
+        // Solo actualizar token si se ha escrito uno nuevo (no vacío)
+        ...(getValue('meta_system_user_token')
+          ? { meta_system_user_token: getValue('meta_system_user_token') }
+          : {}),
+        gmb_account_id: getValue('gmb_account_id'),
+        gmb_location_id: getValue('gmb_location_id'),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -164,6 +177,92 @@ export default async function EditClientPage({ params, searchParams }: Props) {
                 <option value="">— Sin asignar —</option>
                 {grabadors?.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
               </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Redes sociales e integraciones */}
+        <section>
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Redes sociales e integraciones</h2>
+          <p className="mb-4 text-xs text-ink-400">
+            Necesario para que la publicación automática funcione. El token nunca se muestra una vez guardado.
+          </p>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 space-y-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-500">Meta (Instagram / Facebook)</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-ink-700">
+                    Instagram Business Account ID
+                  </label>
+                  <p className="mb-1 text-[11px] text-ink-400">El número de 15-17 dígitos de la cuenta IG Business</p>
+                  <input
+                    type="text"
+                    name="meta_business_id"
+                    defaultValue={clientAny.meta_business_id ?? ''}
+                    placeholder="ej: 17841400000000000"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink-700">
+                    Facebook Page ID
+                  </label>
+                  <p className="mb-1 text-[11px] text-ink-400">ID de la página de Facebook vinculada</p>
+                  <input
+                    type="text"
+                    name="facebook_page_id"
+                    defaultValue={clientAny.facebook_page_id ?? ''}
+                    placeholder="ej: 123456789012345"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink-700">
+                  Meta System User Token
+                </label>
+                <p className="mb-1 text-[11px] text-ink-400">
+                  {clientAny.meta_system_user_token
+                    ? '✓ Token guardado — deja en blanco para mantener el actual'
+                    : 'Aún no configurado'}
+                </p>
+                <input
+                  type="password"
+                  name="meta_system_user_token"
+                  placeholder={clientAny.meta_system_user_token ? '••••••••••••••••' : 'Pegar token aquí'}
+                  className={inputClass}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 space-y-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-500">Google My Business</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-ink-700">GMB Account ID</label>
+                  <p className="mb-1 text-[11px] text-ink-400">Formato: accounts/XXXXXXXXXX</p>
+                  <input
+                    type="text"
+                    name="gmb_account_id"
+                    defaultValue={clientAny.gmb_account_id ?? ''}
+                    placeholder="accounts/123456789"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink-700">GMB Location ID</label>
+                  <p className="mb-1 text-[11px] text-ink-400">Formato: locations/XXXXXXXXXX</p>
+                  <input
+                    type="text"
+                    name="gmb_location_id"
+                    defaultValue={clientAny.gmb_location_id ?? ''}
+                    placeholder="locations/987654321"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </section>
