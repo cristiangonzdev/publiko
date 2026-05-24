@@ -18,17 +18,18 @@ interface RecordingBrief {
 interface Props {
   taskId: string
   title: string
+  clientName: string
   status: string
   deadline: string | null
   recordingBrief: RecordingBrief | null
   driveFolderId: string | null
 }
 
-export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBrief }: Props) {
+export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, recordingBrief }: Props) {
   const [currentStatus, setCurrentStatus] = useState(status)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,6 +76,9 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
+            {clientName && (
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-brand mb-0.5">{clientName}</p>
+            )}
             <p className="font-medium text-ink-900">{title}</p>
             {recordingBrief?.concept && (
               <p className="mt-0.5 text-sm text-ink-500">{recordingBrief.concept}</p>
@@ -105,9 +109,9 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
 
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-4 text-xs text-brand hover:underline"
+          className="mt-4 text-xs text-ink-400 hover:text-ink-700"
         >
-          {expanded ? 'Ocultar ficha' : 'Ver ficha de grabación'}
+          {expanded ? '▲ Ocultar ficha técnica' : '▼ Ver ficha técnica'}
         </button>
 
         {currentStatus !== 'brutos_ready' && (

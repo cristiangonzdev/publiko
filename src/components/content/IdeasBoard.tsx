@@ -91,6 +91,8 @@ interface Props {
   brandBrainCompleted: boolean
   grabadores: TeamMember[]
   editores: TeamMember[]
+  adminUserId: string
+  adminName: string
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -135,7 +137,7 @@ function findCopyIndex(options: CopyOption[] | null, selected: string | null): n
   return idx >= 0 ? idx : null
 }
 
-export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabadores, editores }: Props) {
+export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabadores, editores, adminUserId, adminName }: Props) {
   const [ideas, setIdeas] = useState(initialIdeas)
   const [generating, setGenerating] = useState(false)
   const [activeStatus, setActiveStatus] = useState<string>('suggested')
@@ -836,8 +838,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                         onChange={(e) => setGrabadorPick(e.target.value)}
                         className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                       >
-                        <option value="">Yo (admin)</option>
-                        {grabadores.map((g) => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+                        <option value="">Sin asignar</option>
+                        <option value={adminUserId}>Yo — {adminName}</option>
+                        {grabadores.filter((g) => g.id !== adminUserId).map((g) => <option key={g.id} value={g.id}>{g.full_name}</option>)}
                       </select>
                     </label>
                     <label className="block">
@@ -848,7 +851,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                         className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                       >
                         <option value="">Sin asignar</option>
-                        {editores.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                        <option value={adminUserId}>Yo — {adminName}</option>
+                        {editores.filter((e) => e.id !== adminUserId).map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                       </select>
                     </label>
                   </div>

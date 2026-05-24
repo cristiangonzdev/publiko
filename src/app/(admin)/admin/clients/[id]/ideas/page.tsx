@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/getUser'
 import { IdeasBoard } from '@/components/content/IdeasBoard'
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 export default async function ClientIdeasPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
+  const { user, fullName } = await getAuthUser()
 
   const [{ data: client }, { data: ideas }, { data: brain }, { data: team }] = await Promise.all([
     supabase.from('clients').select('id, business_name').eq('id', id).single(),
@@ -21,14 +23,19 @@ export default async function ClientIdeasPage({ params }: Props) {
     supabase
       .from('profiles')
       .select('id, full_name, role')
-      .in('role', ['grabador', 'editor'])
+      .in('role', ['grabador', 'editor', 'admin'])
       .eq('is_active', true),
   ])
 
   if (!client) notFound()
 
-  const grabadores = (team ?? []).filter((p) => p.role === 'grabador').map((p) => ({ id: p.id, full_name: p.full_name }))
-  const editores = (team ?? []).filter((p) => p.role === 'editor').map((p) => ({ id: p.id, full_name: p.full_name }))
+  const grabadores = (team ?? [])
+    .filter((p) => p.role === 'grabador' || p.role === 'admin')
+    .map((p) => ({ id: p.id, full_name: p.role === 'admin' ? `${p.full_name} (admin)` : p.full_name }))
+
+  const editores = (team ?? [])
+    .filter((p) => p.role === 'editor' || p.role === 'admin')
+    .map((p) => ({ id: p.id, full_name: p.role === 'admin' ? `${p.full_name} (admin)` : p.full_name }))
 
   return (
     <div className="p-8">
@@ -45,6 +52,8 @@ export default async function ClientIdeasPage({ params }: Props) {
         brandBrainCompleted={brain?.onboarding_completed ?? false}
         grabadores={grabadores}
         editores={editores}
+        adminUserId={user.id}
+        adminName={fullName}
       />
     </div>
   )

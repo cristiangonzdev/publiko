@@ -9,16 +9,14 @@ export default async function GrabadorPage() {
 
   const { data: tasks } = await supabase
     .from('content_tasks')
-    .select('id, title, status, deadline, recording_brief, client_id')
+    .select('id, title, status, deadline, recording_brief, client_id, clients!inner(business_name, drive_folder_id)')
     .eq('grabador_id', user.id)
     .not('status', 'in', '("published","cancelled","delivered","approved")')
     .order('deadline', { ascending: true })
 
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('id, drive_folder_id')
-
-  const folderMap = Object.fromEntries((clients ?? []).map((c) => [c.id, c.drive_folder_id]))
+  const folderMap = Object.fromEntries(
+    (tasks ?? []).map((t) => [t.client_id, (t.clients as unknown as { drive_folder_id: string | null })?.drive_folder_id ?? null])
+  )
 
   const workloadTasks = (tasks ?? []).map((t) => ({ id: t.id, deadline: t.deadline, status: t.status }))
 
@@ -50,6 +48,7 @@ export default async function GrabadorPage() {
                 key={task.id}
                 taskId={task.id}
                 title={task.title}
+                clientName={(task.clients as unknown as { business_name: string })?.business_name ?? ''}
                 status={task.status}
                 deadline={task.deadline}
                 recordingBrief={task.recording_brief as Record<string, unknown> | null}
