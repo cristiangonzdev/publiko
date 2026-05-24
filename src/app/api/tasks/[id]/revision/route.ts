@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notifyUser } from '@/lib/telegram'
+import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -41,6 +42,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       editor?.telegram_chat_id ?? null,
       `✏️ <b>Revisión solicitada</b>\n\n${task.title}\n\nNota: ${note}`,
     )
+    await createNotification(service, {
+      userId: task.editor_id,
+      type: 'review_rejected',
+      title: `Revisión solicitada: ${task.title}`,
+      body: note,
+      taskId: id,
+    })
   }
 
   return NextResponse.json({ ok: true })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notifyUser, notifyAdmin, TG } from '@/lib/telegram'
+import { createNotification, notifTitle } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -73,6 +74,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .eq('id', task.editor_id)
       .single()
     await notifyUser(editor?.telegram_chat_id ?? null, TG.brutosListos(businessName, task.title))
+    await createNotification(service, {
+      userId: task.editor_id,
+      type: 'brutos_ready',
+      title: notifTitle('brutos_ready', task.title),
+      body: `El grabador ha subido los brutos. Ya puedes empezar la edición.`,
+      taskId: task.id,
+      clientName: businessName,
+    })
   }
   await notifyAdmin(TG.brutosListos(businessName, task.title))
 

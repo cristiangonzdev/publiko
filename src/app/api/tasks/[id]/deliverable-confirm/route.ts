@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notifyAdmin, TG } from '@/lib/telegram'
+import { createNotification, notifTitle } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -63,6 +64,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const businessName = (task.clients as unknown as { business_name: string })?.business_name ?? ''
   await notifyAdmin(TG.entregadoAdmin(businessName, task.title))
+
+  // Notificar a todos los admin in-app
+  const { data: admins } = await service
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .eq('is_active', true)
+
+  await Promise.all(
+    (admins ?? []).map((admin) =>
+      createNotification(service, {
+        userId: admin.id,
+        type: 'deliverable_sent',
+        title: notifTitle('deliverable_sent', task.title),
+        body: `El editor ha entregado el contenido. Está listo para revisión.`,
+        taskId: task.id,
+        clientName: businessName,
+      })
+    )
+  )
 
   return NextResponse.json({ asset_id: asset.id, public_url: publicUrl })
 }
