@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 function randomPassword() {
   return 'Pub' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 5) + '!'
 }
 
+async function requireAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  return profile?.role === 'admin'
+}
+
 export async function POST(request: NextRequest) {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = await createServiceClient()
   const { full_name, email, role } = await request.json() as {
     full_name: string; email: string; role: string
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = await createServiceClient()
   const { data, error } = await supabase
     .from('profiles')
