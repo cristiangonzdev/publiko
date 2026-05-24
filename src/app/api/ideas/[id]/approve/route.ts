@@ -36,32 +36,35 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: user.id })
     .eq('id', id)
 
-  // Create task immediately with nulls so the drawer can open right away
+  // Create task immediately (empty briefs) so the drawer opens right away
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: task } = await service
+  const { data: task, error: taskError } = await service
     .from('content_tasks')
     .insert({
       client_id: idea.client_id,
       idea_id: id,
       title: idea.concept,
       content_type: idea.content_type,
-      copy_options: null,
-      recording_brief: null,
-      editing_brief: null,
+      copy_options: [],
+      recording_brief: {},
+      editing_brief: {},
       target_platforms: [],
       status: 'approved_idea',
     } as any)
     .select('id')
     .single()
 
+  if (taskError || !task) {
+    return NextResponse.json({ error: 'Error creando tarea de producción', detail: taskError?.message }, { status: 500 })
+  }
+
   await service
     .from('content_ideas')
-    .update({ content_task_id: task?.id ?? null })
+    .update({ content_task_id: task.id })
     .eq('id', id)
 
   // Generate briefs after the response is sent — user sees the drawer immediately
   after(async () => {
-    if (!task?.id) return
     try {
       const ideaRecord = idea as unknown as Record<string, unknown>
       const brainRecord = attachWinningPatterns(

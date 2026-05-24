@@ -170,7 +170,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
 
   // Poll every 3s while task exists but briefs are still being generated
   useEffect(() => {
-    if (!taskDetail || taskDetail.recording_brief != null) {
+    const brief = taskDetail?.recording_brief as Record<string, unknown> | null | undefined
+    const briefsReady = brief != null && Object.keys(brief).length > 0
+    if (!taskDetail || briefsReady) {
       stopPolling()
       return
     }
@@ -181,7 +183,12 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         const res = await fetch(`/api/ideas/${ideaId}/detail`)
         if (res.ok) {
           const { task } = await res.json() as { task: TaskDetail | null }
-          if (task?.recording_brief != null) setTaskDetail(task)
+          const brief = task?.recording_brief as Record<string, unknown> | null
+          if (brief && Object.keys(brief).length > 0) {
+            setTaskDetail(task)
+            setGrabadorPick(task?.grabador_id ?? '')
+            setEditorPick(task?.editor_id ?? '')
+          }
         }
       } catch { /* silent */ }
     }, 3000)
@@ -633,7 +640,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
               )}
 
               {/* Briefs generating skeleton */}
-              {taskDetail && taskDetail.recording_brief == null && (
+              {taskDetail && (() => { const b = taskDetail.recording_brief as Record<string,unknown>|null; return !b || Object.keys(b).length === 0 })() && (
                 <>
                   <Section title="Brief de grabación">
                     <div className="space-y-2 animate-pulse">
@@ -655,7 +662,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
               )}
 
               {/* Recording brief */}
-              {taskDetail?.recording_brief && (
+              {taskDetail?.recording_brief && Object.keys(taskDetail.recording_brief as object).length > 0 && (
                 <Section title="Brief de grabación">
                   <Row label="Concepto visual" value={taskDetail.recording_brief.concept} />
                   <Row label="Objetivo" value={taskDetail.recording_brief.objective} />
@@ -669,7 +676,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
               )}
 
               {/* Editing brief */}
-              {taskDetail?.editing_brief && (
+              {taskDetail?.editing_brief && Object.keys(taskDetail.editing_brief as object).length > 0 && (
                 <Section title="Brief de edición">
                   <Row label="Duración final" value={taskDetail.editing_brief.duracion_final} />
                   <Row label="Ritmo" value={taskDetail.editing_brief.ritmo} />
@@ -827,8 +834,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                 </Section>
               )}
 
-              {/* Team assignment (visible while idea is approved) */}
-              {taskDetail && ideaStatus === 'approved' && (grabadores.length > 0 || editores.length > 0) && (
+              {/* Team assignment — visible for admin at any production stage */}
+              {taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (grabadores.length > 0 || editores.length > 0) && (
                 <Section title="Equipo asignado (opcional)">
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">

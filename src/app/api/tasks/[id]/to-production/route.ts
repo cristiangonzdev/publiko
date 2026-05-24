@@ -13,13 +13,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: task } = await service
     .from('content_tasks')
-    .select('id, idea_id, client_id, title, grabador_id, copy_selected, deadline, clients!inner(business_name)')
+    .select('id, idea_id, client_id, title, grabador_id, copy_selected, recording_brief, deadline, clients!inner(business_name)')
     .eq('id', id)
     .single()
 
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   if (!task.copy_selected) {
     return NextResponse.json({ error: 'Select a copy before sending to production' }, { status: 400 })
+  }
+  const brief = task.recording_brief as Record<string, unknown> | null
+  if (!brief || Object.keys(brief).length === 0) {
+    return NextResponse.json({ error: 'El brief de grabación aún no está listo. Espera unos segundos.' }, { status: 400 })
   }
 
   const now = new Date().toISOString()
