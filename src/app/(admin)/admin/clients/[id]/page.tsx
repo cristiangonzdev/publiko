@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BrollsManager } from '@/components/admin/BrollsManager'
 import { GenerationConfigPanel } from '@/components/admin/GenerationConfigPanel'
+import { DeleteClientButton } from '@/components/admin/DeleteClientButton'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -189,6 +190,16 @@ export default async function ClientDetailPage({ params }: Props) {
         <div className="lg:col-span-2">
           <BrollsManager clientId={id} />
         </div>
+
+        <section className="rounded-lg border border-red-200 bg-red-50/40 lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-red-600">Zona peligrosa</h2>
+              <p className="mt-1 text-xs text-ink-500">Marca el cliente como baja: deja de contar en MRR y desaparece de los listados.</p>
+            </div>
+            <DeleteClientButton clientId={id} businessName={client.business_name} />
+          </div>
+        </section>
 
         <section className="rounded-lg border border-ink-200 bg-white lg:col-span-2">
           <div className="border-b border-ink-100 px-5 py-3">

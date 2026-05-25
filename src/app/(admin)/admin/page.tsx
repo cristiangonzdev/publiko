@@ -18,7 +18,7 @@ export default async function AdminDashboardPage() {
     { data: recentActivityRaw },
   ] = await Promise.all([
     supabase.rpc('get_mrr_total'),
-    supabase.from('clients').select('id, business_name, status, monthly_fee, contract_end').eq('is_active', true),
+    supabase.from('clients').select('id, business_name, status, monthly_fee, contract_end').eq('is_active', true).is('deleted_at', null),
     supabase
       .from('content_tasks')
       .select('id, title, client_id, status, deadline')
