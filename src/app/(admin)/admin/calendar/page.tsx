@@ -11,7 +11,7 @@ export default async function AdminCalendarPage() {
     supabase
       .from('content_tasks')
       .select('id, client_id, title, status, content_type, publish_at, target_platforms')
-      .not('status', 'in', '("cancelled")')
+      .not('status', 'in', '("failed")')
       .gte('publish_at', start)
       .lte('publish_at', end)
       .order('publish_at', { ascending: true }),

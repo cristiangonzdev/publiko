@@ -41,6 +41,11 @@ export default async function GlobalIdeasPage() {
         </div>
       </div>
 
+      <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <span className="font-semibold">Vista global</span> — puedes aprobar y descartar ideas de todos los clientes. Para asignar grabador/editor, seleccionar copy y enviar a producción, ve a{' '}
+        <span className="font-medium">Cliente → Ideas</span>.
+      </div>
+
       <GlobalIdeasBoard
         initialIdeas={enrichedIdeas as Parameters<typeof GlobalIdeasBoard>[0]['initialIdeas']}
         clients={clients ?? []}

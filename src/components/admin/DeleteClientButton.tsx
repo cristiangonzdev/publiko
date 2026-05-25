@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation'
 
 interface Props {
   clientId: string
-  businessName: string
+  clientName: string
 }
 
-export function DeleteClientButton({ clientId, businessName }: Props) {
+export function DeleteClientButton({ clientId, clientName }: Props) {
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [typed, setTyped] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canDelete = typed.trim().toLowerCase() === businessName.trim().toLowerCase()
+  const canDelete = typed.trim().toLowerCase() === clientName.trim().toLowerCase()
 
   const handleDelete = async () => {
     if (!canDelete) return
@@ -40,9 +40,9 @@ export function DeleteClientButton({ clientId, businessName }: Props) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+        className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
       >
-        Eliminar cliente
+        Eliminar
       </button>
     )
   }
@@ -52,8 +52,8 @@ export function DeleteClientButton({ clientId, businessName }: Props) {
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
         <h2 className="font-serif text-xl text-ink-900">Eliminar cliente</h2>
         <p className="mt-2 text-sm text-ink-600">
-          Esta acción marca <span className="font-semibold">{businessName}</span> como dado de baja: deja de contar en el MRR,
-          desaparece de listados y deja de generar contenido. El histórico se conserva.
+          Esta acción marca <span className="font-semibold">{clientName}</span> como dado de baja: deja de contar en el MRR,
+          desaparece de listados y deja de generar contenido. El histórico se conserva en la base de datos.
         </p>
         <p className="mt-3 text-xs text-ink-500">
           Para confirmar, escribe el nombre exacto del negocio:
@@ -62,7 +62,7 @@ export function DeleteClientButton({ clientId, businessName }: Props) {
           type="text"
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
-          placeholder={businessName}
+          placeholder={clientName}
           className="mt-2 w-full rounded-md border border-ink-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
           autoFocus
         />

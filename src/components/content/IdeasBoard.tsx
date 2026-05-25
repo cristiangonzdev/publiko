@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { AddIdeaModal } from './AddIdeaModal'
@@ -91,6 +91,8 @@ interface Props {
   brandBrainCompleted: boolean
   grabadores: TeamMember[]
   editores: TeamMember[]
+  adminUserId: string
+  adminName: string
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -135,7 +137,7 @@ function findCopyIndex(options: CopyOption[] | null, selected: string | null): n
   return idx >= 0 ? idx : null
 }
 
-export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabadores, editores }: Props) {
+export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabadores, editores, adminUserId, adminName }: Props) {
   const [ideas, setIdeas] = useState(initialIdeas)
   const [generating, setGenerating] = useState(false)
   const [activeStatus, setActiveStatus] = useState<string>('suggested')
@@ -157,6 +159,41 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const [togglingTier, setTogglingTier] = useState(false)
   const [runningJudge, setRunningJudge] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+  }, [])
+
+  // Poll every 3s while task exists but briefs are still being generated
+  useEffect(() => {
+    const brief = taskDetail?.recording_brief as Record<string, unknown> | null | undefined
+    const briefsReady = brief != null && Object.keys(brief).length > 0
+    if (!taskDetail || briefsReady) {
+      stopPolling()
+      return
+    }
+    if (!selectedIdea) return
+    const ideaId = selectedIdea.id as string
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ideas/${ideaId}/detail`)
+        if (res.ok) {
+          const { task } = await res.json() as { task: TaskDetail | null }
+          const brief = task?.recording_brief as Record<string, unknown> | null
+          if (brief && Object.keys(brief).length > 0) {
+            setTaskDetail(task)
+            setGrabadorPick(task?.grabador_id ?? '')
+            setEditorPick(task?.editor_id ?? '')
+          }
+        }
+      } catch { /* silent */ }
+    }, 3000)
+    return stopPolling
+  }, [taskDetail, selectedIdea, stopPolling])
 
   const toggleApprovalTier = async () => {
     if (!taskDetail) return
@@ -221,8 +258,11 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     try {
       const res = await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
-      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'approved' } : i))
+      const original = ideas.find((i) => i.id === ideaId)
+      const updated = { ...(original ?? {}), id: ideaId, status: 'approved' }
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? updated : i))
       setActiveStatus('approved')
+      void openDetail(updated)
     } catch (err) {
       alert(`Error aprobando idea: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -263,6 +303,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   }
 
   const closeDetail = () => {
+    stopPolling()
     setSelectedIdea(null)
     setTaskDetail(null)
     setGrabadorPick('')
@@ -480,7 +521,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                   disabled={loadingId === idea.id as string}
                   className="flex-1 rounded bg-ink-900 py-1.5 text-xs font-medium text-white hover:bg-ink-800 disabled:opacity-50"
                 >
-                  {loadingId === idea.id as string ? 'Generando brief…' : 'Aprobar'}
+                  {loadingId === idea.id as string ? 'Aprobando…' : 'Aprobar'}
                 </button>
                 <button
                   onClick={() => discard(idea.id as string)}
@@ -598,8 +639,30 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                 <div className="py-6 text-center text-sm text-ink-400">Cargando briefs…</div>
               )}
 
+              {/* Briefs generating skeleton */}
+              {taskDetail && (() => { const b = taskDetail.recording_brief as Record<string,unknown>|null; return !b || Object.keys(b).length === 0 })() && (
+                <>
+                  <Section title="Brief de grabación">
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                      <div className="h-3.5 rounded bg-ink-100 w-3/5" />
+                    </div>
+                    <p className="mt-3 text-xs text-ink-400">Claude está generando el brief…</p>
+                  </Section>
+                  <Section title="Brief de edición">
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                    </div>
+                  </Section>
+                </>
+              )}
+
               {/* Recording brief */}
-              {taskDetail?.recording_brief && (
+              {taskDetail?.recording_brief && Object.keys(taskDetail.recording_brief as object).length > 0 && (
                 <Section title="Brief de grabación">
                   <Row label="Concepto visual" value={taskDetail.recording_brief.concept} />
                   <Row label="Objetivo" value={taskDetail.recording_brief.objective} />
@@ -613,7 +676,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
               )}
 
               {/* Editing brief */}
-              {taskDetail?.editing_brief && (
+              {taskDetail?.editing_brief && Object.keys(taskDetail.editing_brief as object).length > 0 && (
                 <Section title="Brief de edición">
                   <Row label="Duración final" value={taskDetail.editing_brief.duracion_final} />
                   <Row label="Ritmo" value={taskDetail.editing_brief.ritmo} />
@@ -771,8 +834,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                 </Section>
               )}
 
-              {/* Team assignment (visible while idea is approved) */}
-              {taskDetail && ideaStatus === 'approved' && (grabadores.length > 0 || editores.length > 0) && (
+              {/* Team assignment — visible for admin at any production stage */}
+              {taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (grabadores.length > 0 || editores.length > 0) && (
                 <Section title="Equipo asignado (opcional)">
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
@@ -782,8 +845,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                         onChange={(e) => setGrabadorPick(e.target.value)}
                         className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                       >
-                        <option value="">Yo (admin)</option>
-                        {grabadores.map((g) => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+                        <option value="">Sin asignar</option>
+                        <option value={adminUserId}>Yo — {adminName}</option>
+                        {grabadores.filter((g) => g.id !== adminUserId).map((g) => <option key={g.id} value={g.id}>{g.full_name}</option>)}
                       </select>
                     </label>
                     <label className="block">
@@ -794,7 +858,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                         className="w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                       >
                         <option value="">Sin asignar</option>
-                        {editores.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                        <option value={adminUserId}>Yo — {adminName}</option>
+                        {editores.filter((e) => e.id !== adminUserId).map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                       </select>
                     </label>
                   </div>

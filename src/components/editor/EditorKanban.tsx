@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { detectAspectRatio } from '@/lib/upload/aspect-ratio'
 import { BrollsPanel } from './BrollsPanel'
+import { BrandVoicePanel } from '@/components/ui/BrandVoicePanel'
 
 const COLS = [
   { key: 'brutos_ready', label: 'Brutos listos' },
@@ -59,7 +60,8 @@ export function EditorKanban({ initialTasks }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [brutos, setBrutos] = useState<Record<string, Bruto[]>>({})
   const [loadingBrutos, setLoadingBrutos] = useState<string | null>(null)
-  const [brollsClient, setBrollsClient] = useState<{ id: string; name: string } | null>(null)
+  const [brollsClient, setBrollsClient]       = useState<{ id: string; name: string } | null>(null)
+  const [brandVoiceClient, setBrandVoiceClient] = useState<{ id: string; name: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadingTask = useRef<string | null>(null)
 
@@ -148,6 +150,14 @@ export function EditorKanban({ initialTasks }: Props) {
         />
       )}
 
+      {brandVoiceClient && (
+        <BrandVoicePanel
+          clientId={brandVoiceClient.id}
+          clientName={brandVoiceClient.name}
+          onClose={() => setBrandVoiceClient(null)}
+        />
+      )}
+
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0">
         {COLS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key)
@@ -178,11 +188,24 @@ export function EditorKanban({ initialTasks }: Props) {
                         <p className="text-sm font-medium text-ink-900 leading-snug">{task.title}</p>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
+                            onClick={() => setBrandVoiceClient({ id: task.client_id, name: task.client_name ?? '' })}
+                            className="flex items-center gap-1 text-[10px] text-violet-500 hover:text-violet-700"
+                            title="Ver brand voice del cliente"
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                            voz
+                          </button>
+                          <button
                             onClick={() => setBrollsClient({ id: task.client_id, name: task.client_name ?? '' })}
-                            className="text-[10px] text-ink-400 hover:text-brand"
+                            className="flex items-center gap-1 text-[10px] text-ink-400 hover:text-brand"
                             title="Ver b-rolls del cliente"
                           >
-                            📁 b-rolls
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                            </svg>
+                            b-rolls
                           </button>
                           <button
                             onClick={() => toggleExpand(task.id)}

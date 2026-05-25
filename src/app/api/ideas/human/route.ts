@@ -76,7 +76,7 @@ Responde SOLO en JSON:
       human_input,
       status: 'suggested',
     } as any)
-    .select('id, concept, full_description')
+    .select('id, concept, full_description, content_type, angle, content_origin, status')
     .single()
 
   return NextResponse.json({ idea })

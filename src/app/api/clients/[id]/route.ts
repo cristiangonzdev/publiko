@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const sessionClient = await createClient()
+  const { data: { user } } = await sessionClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await supabase
+  const { data: profile } = await sessionClient
     .from('profiles')
     .select('role')
     .eq('id', user.id)
@@ -17,6 +17,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const supabase = await createServiceClient()
   const now = new Date().toISOString()
   const { error } = await supabase
     .from('clients')
@@ -28,6 +29,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       updated_at: now,
     })
     .eq('id', id)
+    .is('deleted_at', null)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

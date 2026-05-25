@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -8,7 +8,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: idea } = await supabase
+  const service = await createServiceClient()
+
+  const { data: idea } = await service
     .from('content_ideas')
     .select('*')
     .eq('id', id)
@@ -16,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!idea) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: task } = await supabase
+  const { data: task } = await service
     .from('content_tasks')
     .select('id, recording_brief, editing_brief, copy_options, copy_selected, hashtags, cta, status, grabador_id, editor_id, deadline, bruto_asset_ids, approval_tier, copies_per_platform, judge_verdict, judge_run_at, auto_publish_blocked_reason, target_platforms, publish_at')
     .eq('idea_id', id)

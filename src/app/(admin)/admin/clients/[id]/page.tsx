@@ -31,7 +31,7 @@ export default async function ClientDetailPage({ params }: Props) {
         .from('content_tasks')
         .select('id, title, status, deadline')
         .eq('client_id', id)
-        .not('status', 'in', '("published","cancelled")')
+        .not('status', 'in', '("published")')
         .order('deadline', { ascending: true })
         .limit(5),
       supabase
@@ -63,7 +63,13 @@ export default async function ClientDetailPage({ params }: Props) {
             <span className="text-sm text-ink-500">{client.monthly_fee ? `${client.monthly_fee} €/mes` : '—'}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/clients/${id}/edit`}
+            className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
+          >
+            Editar
+          </Link>
           <Link
             href={`/admin/clients/${id}/brand-brain`}
             className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
@@ -82,6 +88,7 @@ export default async function ClientDetailPage({ params }: Props) {
           >
             Ideas →
           </Link>
+          <DeleteClientButton clientId={id} clientName={client.business_name} />
         </div>
       </div>
 
@@ -190,16 +197,6 @@ export default async function ClientDetailPage({ params }: Props) {
         <div className="lg:col-span-2">
           <BrollsManager clientId={id} />
         </div>
-
-        <section className="rounded-lg border border-red-200 bg-red-50/40 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-            <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-red-600">Zona peligrosa</h2>
-              <p className="mt-1 text-xs text-ink-500">Marca el cliente como baja: deja de contar en MRR y desaparece de los listados.</p>
-            </div>
-            <DeleteClientButton clientId={id} businessName={client.business_name} />
-          </div>
-        </section>
 
         <section className="rounded-lg border border-ink-200 bg-white lg:col-span-2">
           <div className="border-b border-ink-100 px-5 py-3">

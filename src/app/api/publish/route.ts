@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
 
   const results = await Promise.allSettled(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (posts as any[]).map(async (post: { post_id: string; platform: string; content_type?: string | null; copy: string; hashtags: string[] | null; asset_id: string; meta_system_user_token: string; meta_business_id: string; attempts_made?: number }) => {
-      const { post_id, platform, content_type, copy, hashtags, asset_id, meta_system_user_token, meta_business_id } = post
+    (posts as any[]).map(async (post: { post_id: string; platform: string; content_type?: string | null; copy: string; hashtags: string[] | null; asset_id: string; meta_system_user_token: string; meta_business_id: string; facebook_page_id?: string | null; attempts_made?: number }) => {
+      const { post_id, platform, content_type, copy, hashtags, asset_id, meta_system_user_token, meta_business_id, facebook_page_id } = post
       const currentAttempt = (post.attempts_made ?? 0) + 1
 
       try {
@@ -51,8 +51,10 @@ export async function POST(request: NextRequest) {
             kind,
           })
         } else if (platform === 'facebook') {
+          const fbPageId = facebook_page_id || meta_business_id
+          if (!fbPageId) throw new Error('Cliente sin Facebook Page ID configurado')
           result = await publishToFacebook(
-            meta_business_id,
+            fbPageId,
             meta_system_user_token,
             asset.public_url,
             asset.file_type,

@@ -35,6 +35,61 @@ const STATUS_COLOR: Record<string, string> = {
   scheduled: 'bg-teal-50 text-teal-700',
 }
 
+function WorkloadCard({ name, tasks, role }: { name: string; tasks: Task[]; role: 'grabador' | 'editor' }) {
+  const active  = tasks.filter((t) => !['delivered', 'approved', 'published'].includes(t.status)).length
+  const overdue = tasks.filter((t) => {
+    if (!t.deadline) return false
+    return new Date(t.deadline) < new Date() && !['delivered', 'approved', 'published'].includes(t.status)
+  }).length
+  const urgent  = tasks.filter((t) => {
+    if (!t.deadline) return false
+    const days = Math.floor((new Date(t.deadline).getTime() - Date.now()) / 86400000)
+    return days >= 0 && days <= 1 && !['delivered', 'approved', 'published'].includes(t.status)
+  }).length
+
+  const health = overdue > 0 ? 'critical' : urgent > 0 ? 'warning' : active > 5 ? 'busy' : 'ok'
+
+  return (
+    <div className={cn(
+      'rounded-xl border p-4',
+      health === 'critical' ? 'border-red-200 bg-red-50'      :
+      health === 'warning'  ? 'border-amber-200 bg-amber-50'  :
+      health === 'busy'     ? 'border-blue-200 bg-blue-50'    :
+      'border-green-200 bg-green-50'
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-ink-700 truncate max-w-[120px]">{name}</p>
+          <p className={cn(
+            'text-[10px] font-medium uppercase tracking-wide mt-0.5',
+            health === 'critical' ? 'text-red-500'    :
+            health === 'warning'  ? 'text-amber-600'  :
+            health === 'busy'     ? 'text-blue-600'   :
+            'text-green-600'
+          )}>
+            {role === 'grabador' ? 'Grabador' : 'Editor'}
+          </p>
+        </div>
+        <span className={cn(
+          'rounded-lg px-2 py-1 text-base font-bold',
+          health === 'critical' ? 'bg-red-100 text-red-700'       :
+          health === 'warning'  ? 'bg-amber-100 text-amber-700'   :
+          health === 'busy'     ? 'bg-blue-100 text-blue-700'     :
+          'bg-green-100 text-green-700'
+        )}>
+          {active}
+        </span>
+      </div>
+      <div className="mt-2 flex gap-2 text-[10px]">
+        {overdue > 0 && <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-600">{overdue} vencida{overdue > 1 ? 's' : ''}</span>}
+        {urgent  > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">{urgent} urgente{urgent > 1 ? 's' : ''}</span>}
+        {overdue === 0 && urgent === 0 && active === 0 && <span className="text-green-600">Sin carga</span>}
+        {overdue === 0 && urgent === 0 && active > 0  && <span className="text-ink-400">{active} activa{active > 1 ? 's' : ''}</span>}
+      </div>
+    </div>
+  )
+}
+
 export function TasksManager({ initialTasks, grabadores, editores }: Props) {
   const [tasks, setTasks] = useState(initialTasks)
   const [loading, setLoading] = useState<string | null>(null)
@@ -65,8 +120,36 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
 
   const PLATFORMS = ['instagram', 'facebook', 'tiktok', 'gmb']
 
+  const teamHasMembers = grabadores.length + editores.length > 0
+
   return (
-    <div className="mt-6">
+    <div className="mt-6 space-y-6">
+
+      {/* Carga del equipo */}
+      {teamHasMembers && (
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-400">Carga del equipo</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {grabadores.map((g) => (
+              <WorkloadCard
+                key={g.id}
+                name={g.full_name ?? 'Grabador'}
+                role="grabador"
+                tasks={tasks.filter((t) => t.grabador_id === g.id)}
+              />
+            ))}
+            {editores.map((e) => (
+              <WorkloadCard
+                key={e.id}
+                name={e.full_name ?? 'Editor'}
+                role="editor"
+                tasks={tasks.filter((t) => t.editor_id === e.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
         <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
