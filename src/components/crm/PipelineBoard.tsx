@@ -46,14 +46,14 @@ export function PipelineBoard({ initialClients }: Props) {
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-6">
+    <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-6 sm:mx-0 sm:gap-4 sm:px-0">
       {STAGES.map((stage) => {
         const stageClients = clients.filter((c) => c.status === stage.key)
         const stageMRR = stageClients.reduce((sum, c) => sum + (c.monthly_fee ?? 0), 0)
         return (
           <div
             key={stage.key}
-            className="min-w-[240px] flex-shrink-0"
+            className="w-[240px] flex-shrink-0"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => handleDrop(e, stage.key)}
           >

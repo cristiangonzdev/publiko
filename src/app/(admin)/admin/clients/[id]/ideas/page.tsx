@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { IdeasBoard } from '@/components/content/IdeasBoard'
 
@@ -31,11 +31,11 @@ export default async function ClientIdeasPage({ params }: Props) {
   const editores = (team ?? []).filter((p) => p.role === 'editor').map((p) => ({ id: p.id, full_name: p.full_name }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Ideas</div>
-          <h1 className="mt-1 font-serif text-3xl text-ink-900">{client.business_name}</h1>
+          <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">{client.business_name}</h1>
         </div>
       </div>
 

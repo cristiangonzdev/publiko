@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BrollsManager } from '@/components/admin/BrollsManager'
@@ -50,11 +50,11 @@ export default async function ClientDetailPage({ params }: Props) {
   if (!client) notFound()
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
       <div className="flex items-start justify-between">
         <div>
           <Link href="/admin/clients" className="text-xs text-ink-400 hover:text-ink-700">← Clientes</Link>
-          <h1 className="mt-2 font-serif text-3xl text-ink-900">{client.business_name}</h1>
+          <h1 className="mt-2 font-serif text-2xl sm:text-3xl text-ink-900">{client.business_name}</h1>
           <div className="mt-2 flex items-center gap-3">
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[client.status] ?? 'bg-ink-100 text-ink-600'}`}>
               {statusLabel[client.status] ?? client.status}

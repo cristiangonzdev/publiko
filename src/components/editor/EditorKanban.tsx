@@ -148,11 +148,11 @@ export function EditorKanban({ initialTasks }: Props) {
         />
       )}
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0">
         {COLS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key)
           return (
-            <div key={col.key} className="min-w-[280px] flex-shrink-0">
+            <div key={col.key} className="w-[260px] flex-shrink-0 sm:w-[280px]">
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">{col.label}</span>
                 {colTasks.length > 0 && (

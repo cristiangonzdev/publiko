@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { MarkWinnerButton, ArchivePatternButton } from '@/components/admin/WinnerActions'
@@ -91,12 +91,12 @@ export default async function PatternsPage({ params }: Props) {
   const typedPosts = recentPosts ?? []
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
       <div>
         <Link href={`/admin/clients/${id}`} className="text-xs text-ink-400 hover:text-ink-700">
           ← {client.business_name}
         </Link>
-        <h1 className="mt-2 font-serif text-3xl text-ink-900">Patrones aprendidos</h1>
+        <h1 className="mt-2 font-serif text-2xl sm:text-3xl text-ink-900">Patrones aprendidos</h1>
         <p className="mt-1 text-sm text-ink-500">
           Lo que ha funcionado para este cliente. Se inyecta automáticamente al generar ideas y copy.
         </p>

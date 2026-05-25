@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 
 export default async function AdminReportsPage() {
   const supabase = await createClient()
@@ -23,14 +23,14 @@ export default async function AdminReportsPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Analytics</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Informes semanales</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Informes semanales</h1>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="mt-6 overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Cliente', 'Semana', 'Posts', 'Alcance', 'Likes', 'Seguidores +/-', 'Engagement', 'Enviado'].map((h) => (

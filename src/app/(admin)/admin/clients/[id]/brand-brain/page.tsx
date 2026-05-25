@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { BrandBrainForm } from '@/components/brand-brain/BrandBrainForm'
 
@@ -18,9 +18,9 @@ export default async function BrandBrainPage({ params }: Props) {
   if (!client) notFound()
 
   return (
-    <div className="mx-auto max-w-3xl p-8">
+    <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
       <div className="mb-2 text-xs font-medium uppercase tracking-widest text-brand">Brand Brain</div>
-      <h1 className="font-serif text-3xl text-ink-900">{client.business_name}</h1>
+      <h1 className="font-serif text-2xl sm:text-3xl text-ink-900">{client.business_name}</h1>
       <p className="mt-1 text-sm text-ink-500">
         Rellena las 6 secciones. Se guarda automáticamente.
       </p>

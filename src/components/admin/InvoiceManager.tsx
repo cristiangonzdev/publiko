@@ -102,8 +102,8 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
                 {group.reduce((s, i) => s + i.amount, 0).toLocaleString('es-ES')} €
               </span>
             </h2>
-            <div className="overflow-hidden rounded-lg border border-ink-200 bg-white">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
+              <table className="w-full min-w-[640px] text-sm">
                 <tbody className="divide-y divide-ink-100">
                   {group.map((inv) => (
                     <tr key={inv.id} className="hover:bg-ink-50">

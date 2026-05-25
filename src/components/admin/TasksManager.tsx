@@ -67,8 +67,8 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
 
   return (
     <div className="mt-6">
-      <div className="overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Cliente · Tarea', 'Tipo', 'Estado', 'Grabador', 'Editor', 'Deadline', ''].map((h) => (

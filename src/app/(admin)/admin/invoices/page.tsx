@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { InvoiceManager } from '@/components/admin/InvoiceManager'
 
 export default async function InvoicesPage() {
@@ -37,20 +37,20 @@ export default async function InvoicesPage() {
     .reduce((s, i) => s + i.amount, 0)
 
   return (
-    <div className="p-8">
-      <div className="flex items-start justify-between">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Facturación</div>
-          <h1 className="mt-1 font-serif text-3xl text-ink-900">Facturas</h1>
+          <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Facturas</h1>
         </div>
-        <div className="flex gap-6 text-right">
+        <div className="flex gap-6 sm:text-right">
           <div>
             <p className="text-xs text-ink-400">Por cobrar</p>
-            <p className="font-serif text-2xl text-orange-600">{totalPending.toLocaleString('es-ES')} €</p>
+            <p className="font-serif text-xl sm:text-2xl text-orange-600">{totalPending.toLocaleString('es-ES')} €</p>
           </div>
           <div>
             <p className="text-xs text-ink-400">Cobrado este mes</p>
-            <p className="font-serif text-2xl text-green-600">{totalCollected.toLocaleString('es-ES')} €</p>
+            <p className="font-serif text-xl sm:text-2xl text-green-600">{totalCollected.toLocaleString('es-ES')} €</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
 import { redirect } from 'next/navigation'
 import { BrandBrainForm } from '@/components/brand-brain/BrandBrainForm'
@@ -24,10 +24,10 @@ export default async function ClienteOnboardingPage() {
   if (brain?.onboarding_completed) redirect('/cliente')
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Onboarding</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Cuéntanos sobre {client.business_name}</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Cuéntanos sobre {client.business_name}</h1>
         <p className="mt-2 text-sm text-ink-500">
           Completa esta ficha para que podamos crear contenido que suene exactamente como tu negocio.
           Se guarda automáticamente.

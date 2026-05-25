@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
 import { GrabadorTaskCard } from '@/components/grabador/GrabadorTaskCard'
 
@@ -20,10 +20,10 @@ export default async function GrabadorPage() {
   const folderMap = Object.fromEntries((clients ?? []).map((c) => [c.id, c.drive_folder_id]))
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Grabador</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Mis grabaciones</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Mis grabaciones</h1>
       </div>
 
       {!tasks?.length ? (

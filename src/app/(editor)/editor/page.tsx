@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
 import { EditorKanban } from '@/components/editor/EditorKanban'
 
@@ -27,10 +27,10 @@ export default async function EditorPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Editor</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Mis tareas</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Mis tareas</h1>
       </div>
 
       {kanbanTasks.length === 0 ? (

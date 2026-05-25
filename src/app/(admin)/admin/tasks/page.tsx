@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { TasksManager } from '@/components/admin/TasksManager'
 
 export default async function AdminTasksPage() {
@@ -28,10 +28,10 @@ export default async function AdminTasksPage() {
   const editores = (team ?? []).filter((p) => p.role === 'editor')
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Producción</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Tareas</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Tareas</h1>
       </div>
 
       <TasksManager

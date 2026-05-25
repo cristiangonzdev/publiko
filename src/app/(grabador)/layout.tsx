@@ -7,9 +7,9 @@ export default async function GrabadorLayout({ children }: { children: React.Rea
   if (role !== 'grabador' && role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="flex h-screen bg-ink-50">
+    <div className="flex min-h-screen bg-ink-50 lg:h-screen">
       <Sidebar role="grabador" email={email} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">{children}</main>
     </div>
   )
 }

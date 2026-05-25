@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { HumanIdeaForm } from '@/components/content/HumanIdeaForm'
 
 export default async function HumanInputPage() {
@@ -12,10 +12,10 @@ export default async function HumanInputPage() {
     .order('business_name')
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Ideas</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Idea humana</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Idea humana</h1>
         <p className="mt-2 text-sm text-ink-500">
           Convierte una historia real o ángulo humano en una idea estructurada con la IA.
         </p>

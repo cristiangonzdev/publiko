@@ -535,7 +535,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
           <div className="absolute inset-0 bg-black/40" onClick={closeDetail} />
           <div className="relative flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
             {/* Drawer header */}
-            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-4 py-4 sm:px-6">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className={cn('rounded-full px-2 py-0.5 font-medium', STATUS_COLOR[ideaStatus])}>
@@ -574,7 +574,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
             </div>
 
             {/* Drawer body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 space-y-5">
               {/* Full description */}
               {Boolean(selectedIdea.full_description) && (
                 <Section title="Descripción">
@@ -840,7 +840,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
 
             {/* Drawer footer: Send to production */}
             {taskDetail && ideaStatus === 'approved' && (
-              <div className="border-t border-ink-100 bg-ink-50 px-6 py-4">
+              <div className="border-t border-ink-100 bg-ink-50 px-4 py-4 sm:px-6">
                 <button
                   onClick={sendToProduction}
                   disabled={!taskDetail.copy_selected || sendingToProduction}
@@ -862,7 +862,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
 
             {/* No task yet (still suggested) */}
             {!loadingDetail && !taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (
-              <div className="border-t border-ink-100 px-6 py-4">
+              <div className="border-t border-ink-100 px-4 py-4 sm:px-6">
                 <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                   Los briefs se están generando o no están disponibles todavía.
                 </div>

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { GlobalIdeasBoard } from '@/components/content/GlobalIdeasBoard'
 
 export default async function GlobalIdeasPage() {
@@ -30,11 +30,11 @@ export default async function GlobalIdeasPage() {
   const inProduction = enrichedIdeas.filter((i) => i.status === 'in_production').length
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Ideas</div>
-          <h1 className="mt-1 font-serif text-3xl text-ink-900">Banco de ideas</h1>
+          <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Banco de ideas</h1>
           <p className="mt-1 text-sm text-ink-500">
             {suggested} sugeridas · {approved} aprobadas · {inProduction} en producción
           </p>

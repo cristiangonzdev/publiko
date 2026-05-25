@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { ReviewsManager } from '@/components/content/ReviewsManager'
 
 export default async function ReviewsPage() {
@@ -43,10 +43,10 @@ export default async function ReviewsPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Reseñas</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Gestión de reseñas</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Gestión de reseñas</h1>
         <p className="mt-1 text-sm text-ink-500">{items.length} pendientes de respuesta</p>
       </div>
 

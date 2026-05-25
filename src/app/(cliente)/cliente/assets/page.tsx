@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
 import { AssetUploader } from '@/components/cliente/AssetUploader'
 
@@ -22,10 +22,10 @@ export default async function ClienteAssetsPage() {
     : { data: [] }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Portal</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Mis assets</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Mis assets</h1>
         <p className="mt-1 text-sm text-ink-500">Sube fotos y vídeos propios para usar en tu contenido.</p>
       </div>
 
@@ -33,7 +33,7 @@ export default async function ClienteAssetsPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {!assets?.length && (
-          <p className="col-span-4 py-8 text-center text-sm text-ink-400">Sin assets subidos aún.</p>
+          <p className="col-span-2 sm:col-span-3 lg:col-span-4 py-8 text-center text-sm text-ink-400">Sin assets subidos aún.</p>
         )}
         {assets?.map((asset) => (
           <div key={asset.id} className="rounded-lg border border-ink-200 bg-white overflow-hidden">

@@ -1,4 +1,4 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -153,18 +153,18 @@ export default async function AtascadoPage() {
     deliverablesPending.length + overdueTasks.length + failedPosts.length
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-start justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Operación</div>
-          <h1 className="mt-1 font-serif text-3xl text-ink-900">Qué está atascado</h1>
+          <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Qué está atascado</h1>
           <p className="mt-1 text-sm text-ink-500">
             Todo lo que necesita una acción tuya o de alguien del equipo, en un sitio.
           </p>
         </div>
-        <div className="rounded-xl border border-ink-200 bg-white px-5 py-3 text-center">
+        <div className="self-start rounded-xl border border-ink-200 bg-white px-5 py-3 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-400">Items bloqueados</p>
-          <p className={`mt-1 font-serif text-3xl ${totalBlocked === 0 ? 'text-green-600' : 'text-ink-900'}`}>
+          <p className={`mt-1 font-serif text-2xl sm:text-3xl ${totalBlocked === 0 ? 'text-green-600' : 'text-ink-900'}`}>
             {totalBlocked}
           </p>
         </div>

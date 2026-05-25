@@ -7,9 +7,9 @@ export default async function ClienteLayout({ children }: { children: React.Reac
   if (role !== 'cliente' && role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="flex h-screen bg-ink-50">
+    <div className="flex min-h-screen bg-ink-50 lg:h-screen">
       <Sidebar role="cliente" email={email} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">{children}</main>
     </div>
   )
 }

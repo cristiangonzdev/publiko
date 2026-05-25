@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 
 export default async function AdminCalendarPage() {
   const supabase = await createClient()
@@ -46,10 +46,10 @@ export default async function AdminCalendarPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Producción</div>
-        <h1 className="mt-1 font-serif text-3xl text-ink-900">Calendario de publicación</h1>
+        <h1 className="mt-1 font-serif text-2xl sm:text-3xl text-ink-900">Calendario de publicación</h1>
       </div>
 
       <div className="mt-6 space-y-3">
@@ -66,22 +66,26 @@ export default async function AdminCalendarPage() {
               </div>
               <div className="divide-y divide-ink-50">
                 {items.map((t) => (
-                  <div key={t.id} className="flex items-center gap-3 px-4 py-3">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[t.status] ?? 'bg-ink-300'}`} />
+                  <div key={t.id} className="flex items-start gap-3 px-4 py-3">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[t.status] ?? 'bg-ink-300'}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-medium text-brand">{t.business_name}</p>
-                      <p className="truncate text-sm font-medium text-ink-800">{t.title}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] text-ink-500">
-                        {t.content_type}
-                      </span>
-                      {(t.target_platforms as string[] ?? []).map((p) => (
-                        <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600">{p}</span>
-                      ))}
-                      <span className="text-[10px] text-ink-400">
-                        {t.publish_at ? new Date(t.publish_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-medium text-brand">{t.business_name}</p>
+                          <p className="text-sm font-medium text-ink-800 break-words">{t.title}</p>
+                        </div>
+                        <span className="flex-shrink-0 text-[10px] text-ink-400">
+                          {t.publish_at ? new Date(t.publish_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] text-ink-500">
+                          {t.content_type}
+                        </span>
+                        {(t.target_platforms as string[] ?? []).map((p) => (
+                          <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600">{p}</span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))}

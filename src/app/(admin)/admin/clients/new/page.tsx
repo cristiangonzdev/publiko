@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 
 async function createClient(formData: FormData) {
@@ -44,8 +44,8 @@ export default async function NewClientPage({ searchParams }: Props) {
   const { error } = await searchParams
 
   return (
-    <div className="mx-auto max-w-xl p-8">
-      <h1 className="font-serif text-3xl text-ink-900">Nuevo cliente</h1>
+    <div className="mx-auto max-w-xl p-4 sm:p-6 lg:p-8">
+      <h1 className="font-serif text-2xl sm:text-3xl text-ink-900">Nuevo cliente</h1>
       <p className="mt-1 text-sm text-ink-500">Al crear el cliente se abrirá directamente el Brand Brain.</p>
 
       {error && (

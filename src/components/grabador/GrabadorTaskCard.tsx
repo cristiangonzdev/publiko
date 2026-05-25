@@ -72,12 +72,12 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
         onChange={handleFileSelect}
       />
 
-      <div className="p-5">
+      <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-ink-900">{title}</p>
+            <p className="font-medium text-ink-900 break-words">{title}</p>
             {recordingBrief?.concept && (
-              <p className="mt-0.5 text-sm text-ink-500">{recordingBrief.concept}</p>
+              <p className="mt-0.5 text-sm text-ink-500 break-words">{recordingBrief.concept}</p>
             )}
           </div>
           <div className="flex-shrink-0 text-right">
@@ -114,7 +114,7 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="mt-3 w-full rounded-md bg-ink-900 py-2.5 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
+            className="mt-3 w-full rounded-md bg-ink-900 py-3 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50 sm:py-2.5"
           >
             {uploading ? (uploadProgress ?? 'Subiendo…') : '↑ Subir brutos y avisar al editor'}
           </button>
@@ -137,7 +137,7 @@ export function GrabadorTaskCard({ taskId, title, status, deadline, recordingBri
       </div>
 
       {expanded && recordingBrief && (
-        <div className="border-t border-ink-100 px-5 py-4 space-y-3 text-sm">
+        <div className="border-t border-ink-100 px-4 sm:px-5 py-4 space-y-3 text-sm">
           {recordingBrief.objective && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Objetivo</p>
