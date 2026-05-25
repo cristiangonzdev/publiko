@@ -51,8 +51,8 @@ export default async function ClientDetailPage({ params }: Props) {
   if (!client) notFound()
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-start justify-between">
+    <div className="p-4 md:p-8 max-w-5xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link href="/admin/clients" className="text-xs text-ink-400 hover:text-ink-700">← Clientes</Link>
           <h1 className="mt-2 font-serif text-3xl text-ink-900">{client.business_name}</h1>

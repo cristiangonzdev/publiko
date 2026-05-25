@@ -153,8 +153,8 @@ export default async function AtascadoPage() {
     deliverablesPending.length + overdueTasks.length + failedPosts.length
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-start justify-between">
+    <div className="p-4 md:p-8 max-w-6xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Operación</div>
           <h1 className="mt-1 font-serif text-3xl text-ink-900">Qué está atascado</h1>

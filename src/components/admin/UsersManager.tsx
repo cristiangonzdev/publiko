@@ -169,8 +169,8 @@ export function UsersManager({ initialUsers }: Props) {
       )}
 
       {/* Tabla de usuarios */}
-      <div className="mt-8 overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="mt-8 overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="min-w-[560px] w-full text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Nombre', 'Email', 'Rol', 'Estado', 'Acciones'].map(h => (

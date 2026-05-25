@@ -107,7 +107,7 @@ export function NotificationBell() {
 
       {/* Panel dropdown */}
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-80 rounded-xl border border-ink-200 bg-white shadow-2xl z-50">
+        <div className="absolute bottom-full left-0 mb-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-ink-200 bg-white shadow-2xl z-50">
           <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
             <p className="text-sm font-semibold text-ink-900">
               Notificaciones

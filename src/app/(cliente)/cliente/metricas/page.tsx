@@ -52,7 +52,7 @@ export default async function ClienteMetricasPage() {
   const latestReport = reports[0]
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Portal</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">Métricas</h1>
@@ -107,8 +107,8 @@ export default async function ClienteMetricasPage() {
           {topPosts.length > 0 && (
             <div className="mt-6">
               <h2 className="mb-3 text-sm font-semibold text-ink-700">Top 5 publicaciones</h2>
-              <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-xl border border-ink-200 bg-white">
+                <table className="min-w-[540px] w-full text-sm">
                   <thead className="border-b border-ink-100 bg-ink-50">
                     <tr>
                       {['Contenido', 'Plataforma', 'Alcance', 'Likes', 'Guardados', 'Engagement'].map((h) => (
@@ -145,8 +145,8 @@ export default async function ClienteMetricasPage() {
           {reports.length > 1 && (
             <div className="mt-6">
               <h2 className="mb-3 text-sm font-semibold text-ink-700">Evolución semanal</h2>
-              <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-xl border border-ink-200 bg-white">
+                <table className="min-w-[480px] w-full text-sm">
                   <thead className="border-b border-ink-100 bg-ink-50">
                     <tr>
                       {['Semana', 'Posts', 'Alcance', 'Engagement', 'Nuevos seguidores'].map((h) => (

@@ -28,7 +28,7 @@ export default async function ClientsPage() {
     .order('created_at', { ascending: false })
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-3xl text-ink-900">Clientes</h1>
         <Link
@@ -39,8 +39,8 @@ export default async function ClientsPage() {
         </Link>
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="mt-8 overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="min-w-[600px] w-full text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Negocio', 'Estado', 'Cuota/mes', 'Contacto', 'Acciones'].map((h) => (

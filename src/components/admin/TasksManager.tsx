@@ -150,8 +150,8 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="min-w-[750px] w-full text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Cliente · Tarea', 'Tipo', 'Estado', 'Grabador', 'Editor', 'Deadline', ''].map((h) => (
@@ -236,7 +236,7 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
                   {isExpanded && (
                     <tr key={`${task.id}-expand`} className="bg-ink-50">
                       <td colSpan={7} className="px-4 py-3">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div>
                             <p className="text-xs font-semibold text-ink-500 mb-1.5">Plataformas destino</p>
                             <div className="flex flex-wrap gap-1.5">

@@ -23,14 +23,14 @@ export default async function AdminReportsPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Analytics</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">Informes semanales</h1>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-ink-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="mt-6 overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <table className="min-w-[700px] w-full text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
             <tr>
               {['Cliente', 'Semana', 'Posts', 'Alcance', 'Likes', 'Seguidores +/-', 'Engagement', 'Enviado'].map((h) => (

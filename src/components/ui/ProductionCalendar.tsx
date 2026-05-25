@@ -156,8 +156,9 @@ export function ProductionCalendar({ tasks, role }: Props) {
               )}
             </div>
 
-            {/* Grid días */}
-            <div className="grid grid-cols-7 gap-2">
+            {/* Grid días — scroll horizontal en móvil */}
+            <div className="overflow-x-auto">
+            <div className="grid grid-cols-7 gap-2 min-w-[560px]">
               {week.map((day, di) => {
                 const dayTasks = tasks.filter((t) => isSameDay(new Date(t.deadline), day))
                 const isToday  = isSameDay(day, today)
@@ -215,6 +216,7 @@ export function ProductionCalendar({ tasks, role }: Props) {
                   </div>
                 )
               })}
+            </div>
             </div>
           </div>
         )
