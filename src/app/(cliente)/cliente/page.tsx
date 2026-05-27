@@ -72,7 +72,7 @@ export default async function ClientePage() {
   const followers = (client?.current_followers as Record<string, number>) ?? {}
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Portal</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">

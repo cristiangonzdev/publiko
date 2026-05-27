@@ -60,7 +60,7 @@ export function BrollsPanel({ clientId, clientName, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-4 md:px-6 py-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-widest text-brand">B-rolls</p>
             <h2 className="mt-1 font-serif text-xl text-ink-900">{clientName}</h2>

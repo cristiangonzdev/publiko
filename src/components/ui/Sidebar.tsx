@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -13,7 +14,6 @@ interface NavItem {
   alert?: boolean
 }
 
-// Iconos SVG inline — consistentes, sin emoji
 function IconDashboard()  { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> }
 function IconClients()    { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m0 0a4 4 0 118 0m-8 0A4 4 0 019 12a4 4 0 014 4"/></svg> }
 function IconPipeline()   { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18"/></svg> }
@@ -90,19 +90,10 @@ export function Sidebar({ role, email }: SidebarProps) {
   const pathname = usePathname()
   const nav      = navByRole[role] ?? adminNav
   const meta     = roleMeta[role] ?? roleMeta.admin
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  return (
-    <aside className="flex h-screen w-56 flex-col border-r border-ink-200 bg-white">
-      {/* Header */}
-      <div className="flex h-14 items-center gap-2.5 border-b border-ink-200 px-4">
-        <span className="text-xs font-bold uppercase tracking-widest text-brand">Agency OS</span>
-        <span className="flex items-center gap-1 rounded-md bg-ink-50 px-2 py-0.5">
-          <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
-          <span className="text-[10px] font-semibold text-ink-500">{meta.label}</span>
-        </span>
-      </div>
-
-      {/* Nav */}
+  const navLinks = (
+    <>
       <nav className="flex-1 overflow-y-auto py-3">
         {nav.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -110,8 +101,9 @@ export function Sidebar({ role, email }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMobileOpen(false)}
               className={cn(
-                'flex items-center gap-2.5 px-3 py-2 mx-2 rounded-lg text-sm transition-all',
+                'flex items-center gap-2.5 px-3 py-2.5 mx-2 rounded-lg text-sm transition-all',
                 isActive
                   ? 'bg-ink-900 text-white font-medium'
                   : item.alert
@@ -128,7 +120,6 @@ export function Sidebar({ role, email }: SidebarProps) {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="border-t border-ink-200 p-3">
         <div className="flex items-center gap-2 mb-2">
           <div className="min-w-0 flex-1">
@@ -138,6 +129,71 @@ export function Sidebar({ role, email }: SidebarProps) {
         </div>
         <SignOutButton />
       </div>
-    </aside>
+    </>
+  )
+
+  const brandHeader = (onClose?: () => void) => (
+    <div className="flex h-14 items-center justify-between border-b border-ink-200 px-4">
+      <div className="flex items-center gap-2.5">
+        <span className="text-xs font-bold uppercase tracking-widest text-brand">Agency OS</span>
+        <span className="flex items-center gap-1 rounded-md bg-ink-50 px-2 py-0.5">
+          <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+          <span className="text-[10px] font-semibold text-ink-500">{meta.label}</span>
+        </span>
+      </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50"
+          aria-label="Cerrar menú"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+
+  return (
+    <>
+      {/* Mobile top bar — only visible on small screens */}
+      <div className="fixed top-0 left-0 right-0 z-30 flex h-14 items-center gap-3 border-b border-ink-200 bg-white px-4 md:hidden">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-50"
+          aria-label="Abrir menú"
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <span className="text-xs font-bold uppercase tracking-widest text-brand">Agency OS</span>
+        <span className="flex items-center gap-1 rounded-md bg-ink-50 px-2 py-0.5">
+          <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+          <span className="text-[10px] font-semibold text-ink-500">{meta.label}</span>
+        </span>
+      </div>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex h-screen w-56 flex-col border-r border-ink-200 bg-white">
+        {brandHeader()}
+        {navLinks}
+      </aside>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="md:hidden">
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-ink-200 bg-white">
+            {brandHeader(() => setMobileOpen(false))}
+            {navLinks}
+          </aside>
+        </div>
+      )}
+    </>
   )
 }

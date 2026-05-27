@@ -24,7 +24,7 @@ export default async function GrabadorCalendarioPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-6">
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Grabador</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">Calendario de grabaciones</h1>

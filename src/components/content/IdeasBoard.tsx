@@ -576,7 +576,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
           <div className="absolute inset-0 bg-black/40" onClick={closeDetail} />
           <div className="relative flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
             {/* Drawer header */}
-            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-4 md:px-6 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className={cn('rounded-full px-2 py-0.5 font-medium', STATUS_COLOR[ideaStatus])}>
@@ -615,7 +615,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
             </div>
 
             {/* Drawer body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 space-y-5">
               {/* Full description */}
               {Boolean(selectedIdea.full_description) && (
                 <Section title="Descripción">

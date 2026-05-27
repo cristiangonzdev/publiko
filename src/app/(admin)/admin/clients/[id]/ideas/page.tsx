@@ -38,7 +38,7 @@ export default async function ClientIdeasPage({ params }: Props) {
     .map((p) => ({ id: p.id, full_name: p.role === 'admin' ? `${p.full_name} (admin)` : p.full_name }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Ideas</div>

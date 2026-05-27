@@ -364,7 +364,7 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedIdea(null)} />
           <div className="relative flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-ink-100 px-4 md:px-6 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="font-medium text-brand">{selectedIdea.client_name}</span>
@@ -399,7 +399,7 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 space-y-5">
               {Boolean(selectedIdea.full_description) && (
                 <Section title="Descripción">
                   <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-line">{selectedIdea.full_description as string}</p>

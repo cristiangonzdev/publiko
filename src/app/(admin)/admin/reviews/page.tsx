@@ -43,7 +43,7 @@ export default async function ReviewsPage() {
   }))
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Reseñas</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">Gestión de reseñas</h1>

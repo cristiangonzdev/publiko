@@ -73,13 +73,13 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
         onChange={handleFileSelect}
       />
 
-      <div className="p-5">
+      <div className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             {clientName && (
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-brand mb-0.5">{clientName}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand mb-0.5">{clientName}</p>
             )}
-            <p className="font-medium text-ink-900">{title}</p>
+            <p className="font-medium text-base text-ink-900">{title}</p>
             {recordingBrief?.concept && (
               <p className="mt-0.5 text-sm text-ink-500">{recordingBrief.concept}</p>
             )}
@@ -109,7 +109,7 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
 
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-4 text-xs text-ink-400 hover:text-ink-700"
+          className="mt-4 min-h-[36px] text-xs text-ink-400 hover:text-ink-700"
         >
           {expanded ? '▲ Ocultar ficha técnica' : '▼ Ver ficha técnica'}
         </button>
@@ -118,7 +118,7 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="mt-3 w-full rounded-md bg-ink-900 py-2.5 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
+            className="mt-3 w-full rounded-md bg-ink-900 py-3 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
           >
             {uploading ? (uploadProgress ?? 'Subiendo…') : '↑ Subir brutos y avisar al editor'}
           </button>
@@ -141,7 +141,7 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
       </div>
 
       {expanded && recordingBrief && (
-        <div className="border-t border-ink-100 px-5 py-4 space-y-3 text-sm">
+        <div className="border-t border-ink-100 px-4 py-4 md:px-5 space-y-3 text-sm">
           {recordingBrief.objective && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Objetivo</p>

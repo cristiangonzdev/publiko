@@ -37,7 +37,7 @@ export default async function InvoicesPage() {
     .reduce((s, i) => s + i.amount, 0)
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Facturación</div>

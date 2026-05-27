@@ -30,7 +30,7 @@ export default async function GlobalIdeasPage() {
   const inProduction = enrichedIdeas.filter((i) => i.status === 'in_production').length
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-brand">Ideas</div>

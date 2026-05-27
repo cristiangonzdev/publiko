@@ -28,7 +28,7 @@ export default async function AdminTasksPage() {
   const editores = (team ?? []).filter((p) => p.role === 'editor')
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-widest text-brand">Producción</div>
         <h1 className="mt-1 font-serif text-3xl text-ink-900">Tareas</h1>
