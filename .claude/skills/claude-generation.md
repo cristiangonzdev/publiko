@@ -148,6 +148,35 @@ try {
 
 ---
 
+## Few-shot de winners (copia real → voz de marca)
+
+Para las funciones que generan copy final, se pueden inyectar los posts ganadores reales del cliente como ejemplos few-shot en el array `messages[]`. Esto calibra la voz de marca de forma concreta, más allá de las descripciones abstractas del system prompt.
+
+```typescript
+import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
+
+// En la API route, antes de llamar a la función de generación:
+const fewShotExamples = await loadWinnerExamples(clientId)
+
+// Los ejemplos se pasan como tercer parámetro (opcional):
+const copies = await generateCopyOptions(brainRecord, ideaRecord, fewShotExamples)
+const perPlatform = await generateCopiesPerPlatform(brainRecord, ideaRecord, platforms, fewShotExamples)
+```
+
+**Cómo funciona internamente:**
+- `loadWinnerExamples` consulta `posts WHERE is_winner = true AND client_id = $1` ordenado por `winner_score DESC`, limit 5
+- `buildFewShotMessages` convierte cada ejemplo en un par user/assistant antes del request real
+- Si no hay winners (`[]`), el comportamiento es idéntico al actual — no hay ramificación especial
+
+**Qué funciones admiten few-shot:**
+- `generateCopyOptions` — tercer parámetro `fewShotExamples?: FewShotExample[]`
+- `generateCopiesPerPlatform` — cuarto parámetro `fewShotExamples?: FewShotExample[]`
+
+**Qué funciones NO usan few-shot** (no generan copy final):
+- `generateWeeklyIdeas`, `generateDailyBatch`, `generateBriefs`, `judgeContent`, `generateReviewResponse`
+
+---
+
 ## Las 8 funciones disponibles en `src/lib/claude/index.ts`
 
 | Función | Input | Output | max_tokens |
@@ -155,8 +184,8 @@ try {
 | `buildSystemPrompt(brandBrain)` | Brand Brain completo | string | — |
 | `generateWeeklyIdeas(brandBrain, recentIdeas, weekContext)` | Brand Brain + contexto | `{system_ideas[], human_ideas[]}` | 2000 |
 | `generateDailyBatch(brandBrain, recentIdeas, config, dateLabel)` | Brand Brain + config | `DailyIdeaDraft[]` | 2500 |
-| `generateCopyOptions(brandBrain, idea)` | Brand Brain + idea | `[{copy, hashtags[], cta}]` × 3 | 1500 |
-| `generateCopiesPerPlatform(brandBrain, idea, platforms)` | Brand Brain + idea + platforms | `{instagram?, facebook?, tiktok?, gmb?}` | 2000 |
+| `generateCopyOptions(brandBrain, idea, fewShot?)` | Brand Brain + idea + ejemplos | `[{copy, hashtags[], cta}]` × 3 | 1500 |
+| `generateCopiesPerPlatform(brandBrain, idea, platforms, fewShot?)` | Brand Brain + idea + platforms + ejemplos | `{instagram?, facebook?, tiktok?, gmb?}` | 2000 |
 | `generateBriefs(brandBrain, idea)` | Brand Brain + idea | `{recording_brief, editing_brief}` | 2000 |
 | `judgeContent(brandBrain, payload)` | Brand Brain + copy | `{passes, score, issues[], reasoning}` | 800 |
 | `generateReviewResponse(brandBrain, review)` | Brand Brain + review | `[respuesta1, respuesta2]` | 600 |

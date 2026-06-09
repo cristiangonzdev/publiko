@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateCopyOptions, generateBriefs } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
+import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,6 +12,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const service = await createServiceClient()
 
@@ -72,8 +76,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         winningPatterns,
       )
 
+      const fewShotExamples = await loadWinnerExamples(idea.client_id as string)
+
       const [copyOptions, briefs] = await Promise.all([
-        generateCopyOptions(brainRecord, ideaRecord),
+        generateCopyOptions(brainRecord, ideaRecord, fewShotExamples),
         generateBriefs(brainRecord, ideaRecord),
       ])
 

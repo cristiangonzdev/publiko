@@ -8,6 +8,7 @@ import {
   type JudgeVerdict,
 } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
+import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const service = await createServiceClient()
@@ -69,12 +72,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const ideaRecord = idea as unknown as Record<string, unknown>
   const brainRecord = (brain ?? {}) as unknown as Record<string, unknown>
 
+  const fewShotExamples = await loadWinnerExamples(idea.client_id as string)
+
   let copyOptions, briefs, perPlatform
   try {
     [copyOptions, briefs, perPlatform] = await Promise.all([
-      generateCopyOptions(brainRecord, ideaRecord),
+      generateCopyOptions(brainRecord, ideaRecord, fewShotExamples),
       generateBriefs(brainRecord, ideaRecord),
-      generateCopiesPerPlatform(brainRecord, ideaRecord, platforms),
+      generateCopiesPerPlatform(brainRecord, ideaRecord, platforms, fewShotExamples),
     ])
   } catch (err) {
     await notifyAdmin(`⚠️ <b>Auto-process falló (Claude)</b>\n\n${idea.concept}\n${err instanceof Error ? err.message : String(err)}`)

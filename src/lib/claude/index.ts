@@ -1,4 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { FewShotExample } from '@/lib/winning-patterns/examples'
+
+export type { FewShotExample }
 
 const client = new Anthropic()
 
@@ -42,6 +45,22 @@ function formatWinningPatterns(patterns: WinningPatternForPrompt[]): string {
   })
 
   return `\nPATRONES QUE HAN FUNCIONADO PARA ESTE CLIENTE (úsalos como inspiración, NO los clones literalmente):\n${lines.join('\n\n')}\n\nReglas al usar estos patrones:\n- INSPÍRATE en el gancho, el ángulo y el formato, NUNCA copies el copy literal\n- Si un patrón es de hace menos de 7 días, EVITA repetir el mismo concept_summary\n- Si varios patrones comparten ángulo/formato, ese es el camino fuerte\n- Si el admin escribió "Por qué funcionó", esa es la señal más importante\n`
+}
+
+function buildFewShotMessages(examples: FewShotExample[]): Anthropic.MessageParam[] {
+  if (examples.length === 0) return []
+  const messages: Anthropic.MessageParam[] = []
+  for (const ex of examples) {
+    messages.push({
+      role: 'user',
+      content: `Genera copy para: "${ex.title}" (${ex.content_type}, ${ex.platform})`,
+    })
+    messages.push({
+      role: 'assistant',
+      content: JSON.stringify([{ copy: ex.copy, hashtags: ex.hashtags }]),
+    })
+  }
+  return messages
 }
 
 export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
@@ -154,13 +173,15 @@ Responde SOLO con JSON válido, sin markdown, sin texto extra:
 
 export async function generateCopyOptions(
   brandBrain: Record<string, unknown>,
-  idea: Record<string, unknown>
+  idea: Record<string, unknown>,
+  fewShotExamples: FewShotExample[] = [],
 ): Promise<{ copy: string; hashtags: string[]; cta: string }[]> {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
     system: buildSystemPrompt(brandBrain),
     messages: [
+      ...buildFewShotMessages(fewShotExamples),
       {
         role: 'user',
         content: `Genera 3 opciones de copy para esta idea de contenido:
@@ -319,6 +340,7 @@ export async function generateCopiesPerPlatform(
   brandBrain: Record<string, unknown>,
   idea: Record<string, unknown>,
   platforms: string[],
+  fewShotExamples: FewShotExample[] = [],
 ): Promise<Record<string, { copy: string; hashtags: string[]; cta: string }>> {
   if (platforms.length === 0) return {}
 
@@ -327,6 +349,7 @@ export async function generateCopiesPerPlatform(
     max_tokens: 1500,
     system: buildSystemPrompt(brandBrain),
     messages: [
+      ...buildFewShotMessages(fewShotExamples),
       {
         role: 'user',
         content: `Genera copy adaptado a cada plataforma para esta idea:
