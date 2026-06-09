@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { contentStatusStyle } from '@/lib/status'
 
 interface CalTask {
   id:          string
@@ -14,28 +15,6 @@ interface CalTask {
 interface Props {
   tasks: CalTask[]
   role:  'editor' | 'grabador'
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  approved_idea:  'Pendiente',
-  brief_sent:     'Brief enviado',
-  recording:      'Grabando',
-  brutos_ready:   'Brutos listos',
-  editing:        'En edición',
-  delivered:      'Entregado',
-  approved:       'Aprobado',
-  revision:       'En revisión',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  approved_idea:  'bg-ink-100 text-ink-600',
-  brief_sent:     'bg-blue-100 text-blue-700',
-  recording:      'bg-yellow-100 text-yellow-700',
-  brutos_ready:   'bg-green-100 text-green-700',
-  editing:        'bg-violet-100 text-violet-700',
-  delivered:      'bg-teal-100 text-teal-700',
-  approved:       'bg-green-100 text-green-700',
-  revision:       'bg-orange-100 text-orange-700',
 }
 
 const TYPE_BADGE: Record<string, string> = {
@@ -202,9 +181,9 @@ export function ProductionCalendar({ tasks, role }: Props) {
                             </span>
                             <span className={cn(
                               'rounded px-1 text-[8px] font-medium',
-                              STATUS_COLOR[t.status] ?? 'bg-ink-100 text-ink-500'
+                              contentStatusStyle(t.status).badge
                             )}>
-                              {STATUS_LABEL[t.status] ?? t.status}
+                              {contentStatusStyle(t.status).label}
                             </span>
                           </div>
                         </div>
@@ -241,8 +220,8 @@ export function ProductionCalendar({ tasks, role }: Props) {
                   <p className="truncate text-sm font-medium text-ink-800">{t.title}</p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className="text-[10px] text-ink-400">{TYPE_BADGE[t.content_type] ?? t.content_type}</span>
-                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', STATUS_COLOR[t.status] ?? 'bg-ink-100 text-ink-500')}>
-                      {STATUS_LABEL[t.status] ?? t.status}
+                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', contentStatusStyle(t.status).badge)}>
+                      {contentStatusStyle(t.status).label}
                     </span>
                   </div>
                 </div>

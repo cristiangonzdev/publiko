@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
+import { invoiceStatusStyle } from '@/lib/status'
 
 export default async function ClienteFacturasPage() {
   const { user } = await getAuthUser()
@@ -19,17 +20,15 @@ export default async function ClienteFacturasPage() {
         .order('created_at', { ascending: false })
     : { data: [] }
 
-  const statusLabel: Record<string, string> = {
-    pending: 'Pendiente',
-    sent: 'Enviada',
-    paid: 'Pagada',
-    overdue: 'Vencida',
-  }
+  // Labels vienen de la fuente única (@/lib/status). El color aquí es solo de
+  // texto (esta tabla no usa "pills"), así que se mantiene un mapa de color de
+  // texto local para no introducir fondos de color y alterar el aspecto.
   const statusColor: Record<string, string> = {
     pending: 'text-ink-500',
     sent: 'text-blue-600',
     paid: 'text-green-600',
     overdue: 'text-red-600 font-semibold',
+    cancelled: 'text-ink-400 line-through',
   }
 
   return (
@@ -67,7 +66,7 @@ export default async function ClienteFacturasPage() {
                   {inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-ES') : '—'}
                 </td>
                 <td className={`px-4 py-3 ${statusColor[inv.status] ?? 'text-ink-500'}`}>
-                  {statusLabel[inv.status] ?? inv.status}
+                  {invoiceStatusStyle(inv.status).label}
                 </td>
                 <td className="px-4 py-3">
                   {inv.pdf_url && (

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { invoiceStatusStyle } from '@/lib/status'
 
 interface Invoice {
   id: string
@@ -29,11 +30,12 @@ interface Props {
   activeClients: ActiveClient[]
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'bg-ink-100 text-ink-600',
-  sent: 'bg-blue-50 text-blue-700',
-  paid: 'bg-green-50 text-green-700',
-  overdue: 'bg-red-50 text-red-700',
+// Títulos de grupo en plural (distintos de la etiqueta singular por factura).
+const GROUP_LABEL: Record<string, string> = {
+  overdue: 'Vencidas',
+  pending: 'Pendientes',
+  sent: 'Enviadas',
+  paid: 'Pagadas',
 }
 
 export function InvoiceManager({ initialInvoices, activeClients }: Props) {
@@ -94,8 +96,8 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
         return (
           <div key={status} className="mb-8">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink-700">
-              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_COLOR[status])}>
-                {status === 'overdue' ? 'Vencidas' : status === 'pending' ? 'Pendientes' : status === 'sent' ? 'Enviadas' : 'Pagadas'}
+              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', invoiceStatusStyle(status).badge)}>
+                {GROUP_LABEL[status] ?? invoiceStatusStyle(status).label}
               </span>
               <span className="text-ink-400 font-normal">{group.length}</span>
               <span className="ml-auto text-ink-400 font-normal">

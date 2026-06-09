@@ -1,18 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
+import { contentStatusStyle } from '@/lib/status'
 import Link from 'next/link'
-
-const STATUS_COLOR: Record<string, string> = {
-  approved: 'bg-blue-50 text-blue-700',
-  scheduled: 'bg-purple-50 text-purple-700',
-  published: 'bg-green-50 text-green-700',
-  editing: 'bg-yellow-50 text-yellow-700',
-  delivered: 'bg-orange-50 text-orange-700',
-}
-const STATUS_LABEL: Record<string, string> = {
-  approved: 'Aprobado', scheduled: 'Programado', published: 'Publicado',
-  editing: 'En edición', delivered: 'En revisión',
-}
 
 interface PostRow {
   id: string; copy: string; platform: string; status: string
@@ -111,8 +100,8 @@ export default async function ClientePage() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLOR[task.status] ?? 'bg-ink-100 text-ink-500'}`}>
-                      {STATUS_LABEL[task.status] ?? task.status}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${contentStatusStyle(task.status).badge}`}>
+                      {contentStatusStyle(task.status).label}
                     </span>
                     {task.publish_at && (
                       <p className="mt-1 text-[10px] text-ink-400">

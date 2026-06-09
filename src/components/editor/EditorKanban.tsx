@@ -6,13 +6,14 @@ import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { detectAspectRatio } from '@/lib/upload/aspect-ratio'
 import { BrollsPanel } from './BrollsPanel'
 import { BrandVoicePanel } from '@/components/ui/BrandVoicePanel'
+import { CONTENT_STATUS } from '@/lib/status'
 
 const COLS = [
-  { key: 'brutos_ready', label: 'Brutos listos' },
-  { key: 'editing', label: 'En edición' },
-  { key: 'delivered', label: 'Entregado' },
-  { key: 'approved', label: 'Aprobado' },
-  { key: 'published', label: 'Publicado' },
+  { key: 'brutos_ready', label: CONTENT_STATUS.brutos_ready.label },
+  { key: 'editing', label: CONTENT_STATUS.editing.label },
+  { key: 'delivered', label: CONTENT_STATUS.delivered.label },
+  { key: 'approved', label: CONTENT_STATUS.approved.label },
+  { key: 'published', label: CONTENT_STATUS.published.label },
 ] as const
 
 const DEADLINE_COLOR = (deadline: string | null) => {

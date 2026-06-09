@@ -2,6 +2,14 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import {
+  approveIdea,
+  createHumanIdea,
+  discardIdea,
+  getIdeaDetail,
+  sendBrainFeedback,
+} from '@/lib/api/ideas'
+import type { CopyOption, EditingBrief, RecordingBrief } from '@/lib/api/tasks'
 
 const STATUS_COLS = ['suggested', 'approved', 'in_production', 'published', 'discarded'] as const
 const STATUS_LABEL: Record<string, string> = {
@@ -21,16 +29,6 @@ const STATUS_COLOR: Record<string, string> = {
 const ORIGIN_BADGE: Record<string, string> = { system: 'IA', human: 'Humano' }
 const CONTENT_TYPES = ['reel', 'post', 'story', 'carrusel'] as const
 
-interface RecordingBrief {
-  concept?: string; objective?: string; planes?: string[]; duracion_estimada?: string
-  preparacion?: string[]; musica_referencia?: string; referencia_visual?: string; notas_tecnicas?: string
-}
-interface EditingBrief {
-  duracion_final?: string; ritmo?: string; transiciones?: string; texto_pantalla?: string | null
-  tipografia?: string | null; musica_exacta?: string; color_grade?: string
-  formato_exportacion?: string; notas_especiales?: string
-}
-interface CopyOption { copy?: string; hashtags?: string[]; cta?: string }
 interface TaskDetail {
   id: string; recording_brief: RecordingBrief | null
   editing_brief: EditingBrief | null; copy_options: CopyOption[] | null; status: string
@@ -103,8 +101,7 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
     if (loadingId) return
     setLoadingId(ideaId)
     try {
-      const res = await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
+      await approveIdea(ideaId)
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'approved' } : i))
       setActiveStatus('approved')
     } catch (err) {
@@ -118,8 +115,10 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
     if (loadingId) return
     setLoadingId(ideaId)
     try {
-      await fetch(`/api/ideas/${ideaId}/discard`, { method: 'POST' })
+      await discardIdea(ideaId)
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'discarded' } : i))
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoadingId(null)
     }
@@ -132,11 +131,10 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
     if (['approved', 'in_production', 'published'].includes(idea.status as string)) {
       setLoadingDetail(true)
       try {
-        const res = await fetch(`/api/ideas/${idea.id}/detail`)
-        if (res.ok) {
-          const { task } = await res.json() as { task: TaskDetail | null }
-          setTaskDetail(task)
-        }
+        const task = await getIdeaDetail(idea.id)
+        setTaskDetail(task)
+      } catch (err) {
+        alert(`Error cargando briefs: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoadingDetail(false)
       }
@@ -146,10 +144,11 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
   const markSuccess = async (idea: Idea) => {
     if (feedbackSent.has(idea.id)) return
     try {
-      await fetch(`/api/clients/${idea.client_id}/brain/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea_id: idea.id, concept: idea.concept, angle: idea.angle, content_type: idea.content_type }),
+      await sendBrainFeedback(idea.client_id, {
+        idea_id: idea.id,
+        concept: idea.concept,
+        angle: idea.angle,
+        content_type: idea.content_type,
       })
       setFeedbackSent((prev) => new Set([...prev, idea.id]))
     } catch { /* silent */ }
@@ -159,13 +158,11 @@ export function GlobalIdeasBoard({ initialIdeas, clients }: Props) {
     if (!addClientId || !addInput.trim()) return
     setAddLoading(true)
     try {
-      const res = await fetch('/api/ideas/human', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: addClientId, human_input: addInput.trim(), content_type: addType }),
+      const idea = await createHumanIdea({
+        client_id: addClientId,
+        human_input: addInput.trim(),
+        content_type: addType,
       })
-      if (!res.ok) throw new Error(await res.text())
-      const { idea } = await res.json() as { idea: Record<string, unknown> }
       const clientName = clients.find((c) => c.id === addClientId)?.business_name ?? addClientId
       setIdeas((prev) => [{ ...idea, id: idea.id as string, client_id: addClientId, client_name: clientName, status: 'suggested', content_type: addType, content_origin: 'human' } as Idea, ...prev])
       setActiveStatus('suggested')

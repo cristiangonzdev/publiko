@@ -35,6 +35,18 @@ export const CLIENT_STATUS: Record<ClientStatus, StatusStyle> = {
   churned: { label: 'Baja', badge: 'bg-red-100 text-red-700' },
 }
 
+export const INVOICE_STATUS: Record<string, StatusStyle> = {
+  pending: { label: 'Pendiente', badge: 'bg-amber-100 text-amber-800' },
+  sent: { label: 'Enviada', badge: 'bg-blue-100 text-blue-700' },
+  paid: { label: 'Pagada', badge: 'bg-green-100 text-green-700' },
+  overdue: { label: 'Vencida', badge: 'bg-red-100 text-red-700' },
+  cancelled: { label: 'Anulada', badge: 'bg-slate-100 text-slate-500' },
+}
+
+export function invoiceStatusStyle(status: string): StatusStyle {
+  return INVOICE_STATUS[status] ?? { label: status, badge: 'bg-slate-100 text-slate-700' }
+}
+
 /** Idea-level statuses (free text on content_ideas.status). */
 export const IDEA_STATUS_LABELS: Record<string, string> = {
   suggested: 'Sugerida',

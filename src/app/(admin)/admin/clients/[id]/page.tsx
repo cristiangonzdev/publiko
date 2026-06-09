@@ -4,19 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { BrollsManager } from '@/components/admin/BrollsManager'
 import { GenerationConfigPanel } from '@/components/admin/GenerationConfigPanel'
 import { DeleteClientButton } from '@/components/admin/DeleteClientButton'
+import { clientStatusStyle } from '@/lib/status'
 
 interface Props {
   params: Promise<{ id: string }>
-}
-
-const statusLabel: Record<string, string> = {
-  lead: 'Lead', proposal_sent: 'Propuesta', negotiation: 'Negociación',
-  active: 'Activo', paused: 'Pausado', churned: 'Baja',
-}
-const statusColor: Record<string, string> = {
-  lead: 'bg-ink-100 text-ink-600', proposal_sent: 'bg-blue-50 text-blue-700',
-  negotiation: 'bg-yellow-50 text-yellow-700', active: 'bg-green-50 text-green-700',
-  paused: 'bg-orange-50 text-orange-700', churned: 'bg-red-50 text-red-700',
 }
 
 export default async function ClientDetailPage({ params }: Props) {
@@ -57,8 +48,8 @@ export default async function ClientDetailPage({ params }: Props) {
           <Link href="/admin/clients" className="text-xs text-ink-400 hover:text-ink-700">← Clientes</Link>
           <h1 className="mt-2 font-serif text-3xl text-ink-900">{client.business_name}</h1>
           <div className="mt-2 flex items-center gap-3">
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[client.status] ?? 'bg-ink-100 text-ink-600'}`}>
-              {statusLabel[client.status] ?? client.status}
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${clientStatusStyle(client.status).badge}`}>
+              {clientStatusStyle(client.status).label}
             </span>
             <span className="text-sm text-ink-500">{client.monthly_fee ? `${client.monthly_fee} €/mes` : '—'}</span>
           </div>

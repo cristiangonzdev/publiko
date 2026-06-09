@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { contentStatusStyle } from '@/lib/status'
 
 interface Task {
   id: string
@@ -22,17 +23,6 @@ interface Props {
   initialTasks: Task[]
   grabadores: TeamMember[]
   editores: TeamMember[]
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  approved_idea: 'bg-ink-100 text-ink-600',
-  brief_sent: 'bg-blue-50 text-blue-700',
-  recording: 'bg-yellow-50 text-yellow-700',
-  brutos_ready: 'bg-purple-50 text-purple-700',
-  editing: 'bg-orange-50 text-orange-700',
-  delivered: 'bg-pink-50 text-pink-700',
-  approved: 'bg-green-50 text-green-700',
-  scheduled: 'bg-teal-50 text-teal-700',
 }
 
 function WorkloadCard({ name, tasks, role }: { name: string; tasks: Task[]; role: 'grabador' | 'editor' }) {
@@ -181,8 +171,8 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
                     </td>
                     <td className="px-3 py-3 text-[11px] text-ink-500">{task.content_type}</td>
                     <td className="px-3 py-3">
-                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', STATUS_COLOR[task.status] ?? 'bg-ink-100 text-ink-500')}>
-                        {task.status}
+                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', contentStatusStyle(task.status).badge)}>
+                        {contentStatusStyle(task.status).label}
                       </span>
                     </td>
                     <td className="px-3 py-3">
