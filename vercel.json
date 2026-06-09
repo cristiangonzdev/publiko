@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/reviews-harvest",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/geo-snapshots",
+      "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/brain-refinement",
+      "schedule": "0 9 1 * *"
     }
   ]
 }

@@ -63,7 +63,7 @@ function buildFewShotMessages(examples: FewShotExample[]): Anthropic.MessagePara
   return messages
 }
 
-export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
+export function buildSystemPrompt(brandBrain: Record<string, unknown> & { _geo_location?: string }): string {
   const id = (brandBrain.identity as Record<string, string>) ?? {}
   const audience = (brandBrain.audience as Record<string, unknown>) ?? {}
   const primary = (audience.primary as Record<string, string>) ?? {}
@@ -75,7 +75,9 @@ export function buildSystemPrompt(brandBrain: Record<string, unknown>): string {
   const highlights = (learning.highlights as Array<Record<string, string>>) ?? []
   const winningPatterns = (learning.winning_patterns as WinningPatternForPrompt[]) ?? []
 
-  return `Eres el experto en contenido de ${id.business_name ?? 'este negocio'}.
+  const geoAddition = brandBrain._geo_location ? buildGeoSystemPromptAddition(brandBrain._geo_location) : ''
+
+  return `Eres el experto en contenido de ${id.business_name ?? 'este negocio'}.${geoAddition}
 
 NEGOCIO:
 ${id.one_liner ?? ''}
@@ -522,4 +524,103 @@ Genera 2 opciones de respuesta cortas y naturales. JSON: ["respuesta1","respuest
 
   const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
   return JSON.parse(text)
+}
+
+// ============================================================================
+// GEO — AI visibility tracking
+// ============================================================================
+
+export interface GeoSnapshot {
+  query: string
+  ai_response_excerpt: string
+  brand_mentioned: boolean
+  brand_position: number | null
+  brand_sentiment: 'positive' | 'neutral' | 'negative' | null
+}
+
+export async function generateGeoQueries(
+  brandBrain: Record<string, unknown>,
+  location: string,
+): Promise<string[]> {
+  const id = (brandBrain.identity as Record<string, string>) ?? {}
+  const sector = id.sector ?? ''
+  const subsector = id.subsector ?? ''
+  const priceTier = id.price_tier ?? ''
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 400,
+    messages: [
+      {
+        role: 'user',
+        content: `Genera 5 consultas de búsqueda que una persona haría a un asistente de IA para encontrar un negocio como este:
+
+Sector: ${sector} — ${subsector}
+Posicionamiento: ${priceTier}
+Ubicación: ${location}
+
+Las consultas deben ser naturales, variadas (diferentes intenciones: descubrir, comparar, encontrar el mejor, recomendar a alguien, búsqueda local).
+
+Responde SOLO con JSON: ["consulta1","consulta2","consulta3","consulta4","consulta5"]`,
+      },
+    ],
+  })
+
+  const textGeo = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
+  return JSON.parse(textGeo) as string[]
+}
+
+export async function simulateGeoQuery(
+  brandBrain: Record<string, unknown>,
+  query: string,
+): Promise<GeoSnapshot> {
+  const id = (brandBrain.identity as Record<string, string>) ?? {}
+  const businessName = id.business_name ?? ''
+  const oneLiner = id.one_liner ?? ''
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 600,
+    system: `Eres un asistente de IA generalista que responde preguntas sobre negocios locales de forma natural y útil.`,
+    messages: [
+      {
+        role: 'user',
+        content: `${query}
+
+Tras responder, evalúa si tu respuesta menciona o incluiría a este negocio específico:
+- Nombre: ${businessName}
+- Descripción: ${oneLiner}
+
+Responde SOLO con este JSON:
+{"response_excerpt":"primeros 300 chars de tu respuesta","brand_mentioned":false,"brand_position":null,"brand_sentiment":null}
+
+brand_position = orden si se menciona (1=primero), null si no. brand_sentiment = "positive"|"neutral"|"negative" o null.`,
+      },
+    ],
+  })
+
+  const textSnap = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
+  const raw = JSON.parse(textSnap) as {
+    response_excerpt: string
+    brand_mentioned: boolean
+    brand_position: number | null
+    brand_sentiment: 'positive' | 'neutral' | 'negative' | null
+  }
+
+  return {
+    query,
+    ai_response_excerpt: raw.response_excerpt,
+    brand_mentioned: raw.brand_mentioned,
+    brand_position: raw.brand_position,
+    brand_sentiment: raw.brand_sentiment,
+  }
+}
+
+export function buildGeoSystemPromptAddition(location: string): string {
+  if (!location) return ''
+  return `\n\nOPTIMIZACIÓN GEO (este cliente quiere aparecer en búsquedas de IA locales):
+- Menciona la ubicación "${location}" cuando sea natural
+- Usa frases que respondan búsquedas locales ("el mejor en ${location}", "cerca de", "en el corazón de")
+- Incluye datos concretos (servicios, especialidades) que un asistente de IA querría destacar
+- Prioriza entidades ricas: nombre del negocio, sector, ubicación, servicio específico`
 }
