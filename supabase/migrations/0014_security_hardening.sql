@@ -13,21 +13,9 @@
 --  9. FK de assets sin ON DELETE → bloquean cleanup
 
 -- ============================================
--- 1. PROFILES — impedir auto-escalada de rol
--- ============================================
-drop policy if exists "Profiles: update own" on profiles;
-create policy "Profiles: update own" on profiles
-  for update
-  using (id = auth.uid() or current_user_role() = 'admin')
-  with check (
-    -- un no-admin solo puede actualizar su propia fila SIN cambiar su rol
-    (id = auth.uid() and role = (select p.role from profiles p where p.id = auth.uid()))
-    or current_user_role() = 'admin'
-  );
-
--- ============================================
--- 2. current_user_role — search_path hardening (la usan las policies RLS,
---    por eso NO se revoca de authenticated)
+-- 1. current_user_role — debe existir ANTES de las policies que la usan.
+--    search_path hardening (la usan las policies RLS, por eso NO se revoca
+--    de authenticated).
 -- ============================================
 create or replace function current_user_role()
 returns user_role
@@ -38,6 +26,19 @@ set search_path = public
 as $$
   select role from profiles where id = auth.uid()
 $$;
+
+-- ============================================
+-- 2. PROFILES — impedir auto-escalada de rol
+-- ============================================
+drop policy if exists "Profiles: update own" on profiles;
+create policy "Profiles: update own" on profiles
+  for update
+  using (id = auth.uid() or current_user_role() = 'admin')
+  with check (
+    -- un no-admin solo puede actualizar su propia fila SIN cambiar su rol
+    (id = auth.uid() and role = (select p.role from profiles p where p.id = auth.uid()))
+    or current_user_role() = 'admin'
+  );
 
 -- ============================================
 -- 2b. RPCs admin/cron — guard interno + search_path
