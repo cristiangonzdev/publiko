@@ -616,6 +616,63 @@ brand_position = orden si se menciona (1=primero), null si no. brand_sentiment =
   }
 }
 
+// ============================================================================
+// Brand Brain auto-refinement
+// ============================================================================
+
+export interface BrainRevisionProposal {
+  section: string
+  proposed_changes: Record<string, unknown>
+  reasoning: string
+}
+
+export async function generateBrainRefinementProposal(
+  brandBrain: Record<string, unknown>,
+  performanceSummary: {
+    top_performers: Array<{ concept: string; content_type: string; angle: string; engagement_rate: number }>
+    underperformers: Array<{ concept: string; content_type: string; angle: string; engagement_rate: number }>
+    winning_patterns_summary: string
+  },
+): Promise<BrainRevisionProposal[]> {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2000,
+    system: `Eres un estratega de contenido con acceso al perfil completo de una marca y sus resultados reales de los últimos 30 días. Tu objetivo: proponer actualizaciones concretas al Brand Brain que mejorarían el rendimiento futuro del contenido.`,
+    messages: [
+      {
+        role: 'user',
+        content: `BRAND BRAIN ACTUAL:
+${JSON.stringify(brandBrain, null, 2)}
+
+RENDIMIENTO DE LOS ÚLTIMOS 30 DÍAS:
+
+Contenido que mejor funcionó (por engagement):
+${performanceSummary.top_performers.map((p) => `- [${p.content_type}/${p.angle}] "${p.concept}" — engagement: ${(p.engagement_rate * 100).toFixed(1)}%`).join('\n')}
+
+Contenido que peor funcionó:
+${performanceSummary.underperformers.map((p) => `- [${p.content_type}/${p.angle}] "${p.concept}" — engagement: ${(p.engagement_rate * 100).toFixed(1)}%`).join('\n')}
+
+Patrones ganadores detectados:
+${performanceSummary.winning_patterns_summary || 'Sin suficientes datos aún.'}
+
+INSTRUCCIONES:
+- Propón SOLO cambios con evidencia clara en los datos de rendimiento
+- Máximo 3 propuestas, sobre secciones distintas del Brand Brain
+- Si los datos no justifican un cambio, responde con array vacío
+- Cada propuesta incluye: sección a modificar, el valor propuesto completo (no parcial), y el razonamiento con datos específicos
+
+Secciones válidas: "voice", "audience", "content_pillars", "competitive", "performance_learning"
+
+Responde SOLO con JSON:
+[{"section":"voice","proposed_changes":{},"reasoning":"evidencia concreta de los datos"}]`,
+      },
+    ],
+  })
+
+  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
+  return JSON.parse(text) as BrainRevisionProposal[]
+}
+
 export function buildGeoSystemPromptAddition(location: string): string {
   if (!location) return ''
   return `\n\nOPTIMIZACIÓN GEO (este cliente quiere aparecer en búsquedas de IA locales):
