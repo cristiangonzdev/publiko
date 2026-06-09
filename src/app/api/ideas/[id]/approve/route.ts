@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { generateCopyOptions, generateBriefs } from '@/lib/claude'
+import { generateCopyOptions, generateBriefs, generateCopiesPerPlatform } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
@@ -20,7 +20,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: idea } = await service
     .from('content_ideas')
-    .select('*, clients!inner(business_name)')
+    .select('*, clients!inner(business_name, daily_generation_config)')
     .eq('id', id)
     .single()
 
@@ -78,9 +78,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
       const fewShotExamples = await loadWinnerExamples(idea.client_id as string)
 
-      const [copyOptions, briefs] = await Promise.all([
+      const clientData = idea.clients as unknown as { business_name: string; daily_generation_config: Record<string, unknown> | null }
+      const platforms = ((clientData?.daily_generation_config?.platforms as string[]) ?? ['instagram'])
+
+      const [copyOptions, briefs, perPlatform] = await Promise.all([
         generateCopyOptions(brainRecord, ideaRecord, fewShotExamples),
         generateBriefs(brainRecord, ideaRecord),
+        generateCopiesPerPlatform(brainRecord, ideaRecord, platforms, fewShotExamples),
       ])
 
       await service
@@ -88,13 +92,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .update({
           copy_options: copyOptions as any,
+          copies_per_platform: perPlatform as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          target_platforms: platforms as any,
           recording_brief: briefs.recording_brief as any,
           editing_brief: briefs.editing_brief as any,
         })
         .eq('id', task.id)
 
-      const businessName = (idea.clients as unknown as { business_name: string })?.business_name ?? ''
-      await notifyAdmin(`✅ <b>Idea aprobada</b>\n\n${businessName}\n${idea.concept}\n\nTarea de producción creada.`)
+      const businessName = clientData?.business_name ?? ''
+      await notifyAdmin(`✅ <b>Idea aprobada</b>\n\n${businessName}\n${idea.concept}\n\nTarea creada con copies para: ${platforms.join(', ')}.`)
     } catch {
       // Brief generation failed — task stays with null briefs, user can retry
     }

@@ -364,6 +364,7 @@ Reglas por plataforma:
 - instagram: tono cercano, caption rica, 5-10 hashtags relevantes (sin spam), CTA suave
 - facebook: tono ligeramente más narrativo, 0-3 hashtags, CTA explícito
 - tiktok: gancho fuerte primera línea, lenguaje conversacional, 3-5 hashtags + uno de tendencia si encaja, CTA con ritmo
+- youtube_shorts: título/gancho máx 60 chars en primera línea, descripción breve orientada a retención (≤150 chars), 2-4 hashtags relevantes, CTA hacia suscripción o acción concreta, tono energético
 - gmb: descriptivo y orientado a búsqueda local, sin hashtags, CTA hacia reserva/llamada
 
 Responde SOLO con JSON válido (claves = nombres de plataforma):
