@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWeeklyReportEmail } from '@/lib/reports'
-import Anthropic from '@anthropic-ai/sdk'
-
-const ai = new Anthropic()
+import { callClaudeJSON, MODEL_SONNET } from '@/lib/claude'
 
 type ChurnLevel = 'low' | 'medium' | 'high'
 
@@ -59,8 +57,8 @@ async function generateReportNarrative(
     ? `\nALERTA: riesgo de churn ${churnLevel.toUpperCase()}. Factores: ${churnFactors.join('; ')}.`
     : ''
 
-  const res = await ai.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  return callClaudeJSON<{ summary: string; recommendations: string; executive_narrative: string }>({
+    model: MODEL_SONNET,
     max_tokens: 900,
     messages: [
       {
@@ -84,27 +82,20 @@ Idioma: español. Tono: profesional pero cercano.`,
       },
     ],
   })
-
-  const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
-  const parsed = JSON.parse(text) as { summary: string; recommendations: string; executive_narrative: string }
-  return parsed
 }
 
-export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-webhook-secret')
-  if (secret !== process.env.WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+type Svc = Awaited<ReturnType<typeof createServiceClient>>
 
-  const { client_id, week_start, week_end } = await request.json() as {
-    client_id: string
-    week_start: string
-    week_end: string
-  }
+async function generateReportForClient(
+  supabase: Svc,
+  client_id: string,
+  week_start: string,
+  week_end: string,
+): Promise<string> {
+  // Límite superior exclusivo: incluye todo el domingo aunque week_end sea date.
+  const weekEndExclusive = new Date(new Date(week_end).getTime() + 86400000).toISOString()
 
-  const supabase = await createServiceClient()
-
-  const [{ data: client }, { data: posts }, { data: prevReport }] = await Promise.all([
+  const [{ data: client }, { data: posts }, { data: prevReport }, { data: overdueInvoices }] = await Promise.all([
     supabase
       .from('clients')
       .select('id, business_name, contact_email')
@@ -116,7 +107,7 @@ export async function POST(request: NextRequest) {
       .eq('client_id', client_id)
       .eq('status', 'published')
       .gte('published_at', week_start)
-      .lte('published_at', week_end),
+      .lt('published_at', weekEndExclusive),
     supabase
       .from('weekly_reports')
       .select('avg_engagement_rate')
@@ -125,9 +116,16 @@ export async function POST(request: NextRequest) {
       .order('week_start', { ascending: false })
       .limit(1)
       .single(),
+    supabase
+      .from('invoices')
+      .select('id')
+      .eq('client_id', client_id)
+      .eq('status', 'pending')
+      .lt('due_date', new Date().toISOString())
+      .limit(1),
   ])
 
-  if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  if (!client) throw new Error('Cliente no encontrado')
 
   const postsData = posts ?? []
   const totalReach = postsData.reduce((s, p) => s + (p.reach ?? 0), 0)
@@ -141,7 +139,9 @@ export async function POST(request: NextRequest) {
     ? Number(prevReport.avg_engagement_rate)
     : null
 
-  const churn = computeChurnRisk(postsData.length, avgEngagement, prevEngagement, false)
+  const hasOverdueInvoice = (overdueInvoices?.length ?? 0) > 0
+
+  const churn = computeChurnRisk(postsData.length, avgEngagement, prevEngagement, hasOverdueInvoice)
 
   const topPost = postsData.sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0))[0] ?? null
 
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
   )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: report } = await (supabase as any)
+  const { data: report, error: upsertError } = await (supabase as any)
     .from('weekly_reports')
     .upsert({
       client_id,
@@ -187,6 +187,10 @@ export async function POST(request: NextRequest) {
     .select('id')
     .single()
 
+  if (upsertError || !report?.id) {
+    throw new Error(`No se pudo guardar el informe semanal: ${upsertError?.message ?? 'sin fila devuelta'}`)
+  }
+
   if (client.contact_email) {
     await sendWeeklyReportEmail({
       businessName: client.business_name,
@@ -205,13 +209,61 @@ export async function POST(request: NextRequest) {
         : undefined,
     })
 
-    if (report?.id) {
-      await supabase
-        .from('weekly_reports')
-        .update({ sent_to_client: true, sent_at: new Date().toISOString() })
-        .eq('id', report.id)
-    }
+    await supabase
+      .from('weekly_reports')
+      .update({ sent_to_client: true, sent_at: new Date().toISOString() })
+      .eq('id', report.id)
   }
 
-  return NextResponse.json({ ok: true, report_id: report?.id })
+  return report.id
+}
+
+function authorized(request: NextRequest): boolean {
+  const secret = request.headers.get('x-webhook-secret')
+  const bearer = request.headers.get('authorization')
+  return secret === process.env.WEBHOOK_SECRET || bearer === `Bearer ${process.env.CRON_SECRET}`
+}
+
+export async function POST(request: NextRequest) {
+  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { client_id, week_start, week_end } = await request.json() as {
+    client_id: string; week_start: string; week_end: string
+  }
+  const supabase = await createServiceClient()
+  try {
+    const reportId = await generateReportForClient(supabase, client_id, week_start, week_end)
+    return NextResponse.json({ ok: true, report_id: reportId })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 })
+  }
+}
+
+/** Lunes–domingo de la semana anterior (en UTC, suficiente para agrupar informes). */
+function lastWeekRange(): { week_start: string; week_end: string } {
+  const now = new Date()
+  const day = now.getUTCDay() // 0=domingo … 6=sábado
+  const mondayThisMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - ((day + 6) % 7) * 86400000
+  const mondayPrev = new Date(mondayThisMs - 7 * 86400000)
+  const sundayPrev = new Date(mondayThisMs - 86400000)
+  return { week_start: mondayPrev.toISOString().slice(0, 10), week_end: sundayPrev.toISOString().slice(0, 10) }
+}
+
+// Cron semanal (Vercel: GET + Bearer CRON_SECRET): informe de la semana anterior
+// para todos los clientes activos.
+export async function GET(request: NextRequest) {
+  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await createServiceClient()
+  const { week_start, week_end } = lastWeekRange()
+  const { data: clients } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('is_active', true)
+    .eq('status', 'active')
+
+  const results = await Promise.allSettled(
+    (clients ?? []).map((c) => generateReportForClient(supabase, c.id, week_start, week_end)),
+  )
+  const generated = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.filter((r) => r.status === 'rejected').length
+  return NextResponse.json({ ok: true, week_start, week_end, generated, failed })
 }

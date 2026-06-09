@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/brain-refinement",
       "schedule": "0 9 1 * *"
+    },
+    {
+      "path": "/api/analytics/harvest",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/reports/generate",
+      "schedule": "0 6 * * 1"
     }
   ]
 }

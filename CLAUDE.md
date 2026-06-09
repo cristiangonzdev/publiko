@@ -64,7 +64,7 @@ Node.js target: ES2022
 ├── tsconfig.json                      ← strict: true, alias @/* → ./src/*
 ├── next.config.ts
 ├── tailwind.config.ts
-├── vercel.json                        ← Cron jobs (4 cronjobs configurados)
+├── vercel.json                        ← Cron jobs (8 crons configurados)
 ├── .env.example
 │
 ├── docs/
@@ -151,11 +151,15 @@ Node.js target: ES2022
 │   │       ├── health/
 │   │       ├── analytics/harvest/
 │   │       ├── clients/[id]/          ← CRUD + brain + brolls + generation-config
-│   │       ├── cron/
+│   │       ├── analytics/harvest/     ← Cron analytics
+│   │       ├── reports/generate/      ← Cron informes
+│   │       ├── cron/                  ← 8 crons en total (ver vercel.json)
 │   │       │   ├── cleanup-assets/    ← 3 AM diario
 │   │       │   ├── daily-generation/  ← 6 AM diario
 │   │       │   ├── publish-retry/     ← Cada 15 min
-│   │       │   └── reviews-harvest/   ← Cada hora
+│   │       │   ├── reviews-harvest/   ← Cada hora
+│   │       │   ├── geo-snapshots/     ← Visibilidad IA / geo
+│   │       │   └── brain-refinement/  ← Refinamiento Brand Brain
 │   │       ├── ideas/                 ← generate, human, [id]/{approve,auto-process,discard}
 │   │       ├── invoices/
 │   │       ├── notifications/
@@ -182,10 +186,13 @@ Node.js target: ES2022
 │   │   │   ├── server.ts              ← createClient() + createServiceClient() — Server Components y API routes
 │   │   │   └── middleware.ts          ← updateSession() — refresca cookie en cada request
 │   │   ├── claude/
-│   │   │   └── index.ts              ← 8 funciones: generateWeeklyIdeas, generateDailyBatch,
+│   │   │   └── index.ts              ← 12 funciones: generateWeeklyIdeas, generateDailyBatch,
 │   │   │                             ←   generateCopyOptions, generateCopiesPerPlatform,
 │   │   │                             ←   generateBriefs, judgeContent, generateReviewResponse,
-│   │   │                             ←   buildSystemPrompt
+│   │   │                             ←   generateGeoQueries, simulateGeoQuery,
+│   │   │                             ←   generateBrainRefinementProposal, buildSystemPrompt,
+│   │   │                             ←   buildGeoSystemPromptAddition (+ helpers
+│   │   │                             ←   callClaudeJSON / stripMarkdown)
 │   │   ├── meta/
 │   │   │   ├── index.ts              ← publishToInstagram, publishToFacebook, publishFacebookStory
 │   │   │   └── analytics.ts          ← getPostInsights, getIGFollowerCount
@@ -212,7 +219,12 @@ Node.js target: ES2022
         ├── 0006_publish_retries.sql  ← retry_count, scheduled_retry_at, backoff
         ├── 0007_gmb_integration.sql  ← gmb_account_id, gmb_location_id, external_review_id
         ├── 0008_notifications.sql    ← Tabla notifications con RLS in-app
-        └── 0009_facebook_page_id.sql ← Separar facebook_page_id de meta_business_id
+        ├── 0009_facebook_page_id.sql ← Separar facebook_page_id de meta_business_id
+        ├── 0010_crm_activities.sql   ← Tabla crm_activities (notas CRM admin-only)
+        ├── 0011_ai_visibility.sql    ← Tabla ai_visibility_snapshots (geo / visibilidad IA)
+        ├── 0012_brain_revisions.sql  ← Tabla brand_brain_revisions (historial de refinamientos)
+        ├── 0013_analytics_reports.sql ← Crons analytics/harvest + reports/generate
+        └── 0014_security.sql         ← Hardening de seguridad (RLS / guards)
 ```
 
 ---
@@ -272,7 +284,7 @@ discarded   ← terminal descartado por admin
 | `invoices` | Facturas (setup y recurrentes) con estado de pago |
 | `notifications` | Log de notificaciones in-app con read_at para el badge de campana |
 
-**Tablas adicionales:** `crm_activities` (notas CRM admin-only).
+**Tablas adicionales (16 en total):** `crm_activities` (notas CRM admin-only), `ai_visibility_snapshots` (snapshots de visibilidad IA / geo) y `brand_brain_revisions` (historial de refinamientos del Brand Brain).
 
 RPCs clave: `get_mrr_total()`, `get_posts_to_publish()`, `compute_client_baseline(client_id)`, `get_winning_patterns_for_prompt(client_id)`, `current_user_role()`.
 
@@ -327,6 +339,7 @@ META_APP_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REFRESH_TOKEN=
+GOOGLE_REFRESH_TOKEN_GMB=
 GOOGLE_DRIVE_ROOT_FOLDER_ID=
 
 # Telegram (privada)
@@ -335,6 +348,7 @@ TELEGRAM_ADMIN_CHAT_ID=
 
 # Resend — email al cliente (privada)
 RESEND_API_KEY=
+RESEND_FROM=
 
 # Secrets para crons y webhooks (privada)
 CRON_SECRET=

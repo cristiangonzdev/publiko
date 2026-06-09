@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['grabador'] })
+  if (!access.ok) return access.response
 
   const { file_name } = await request.json() as { file_name?: string }
   if (!file_name) return NextResponse.json({ error: 'file_name required' }, { status: 400 })

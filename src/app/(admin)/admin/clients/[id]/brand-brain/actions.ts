@@ -29,17 +29,4 @@ export async function completeBrandBrainOnboarding(clientId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('client_id', clientId)
-
-  // Trigger n8n onboarding workflow
-  const webhookUrl = process.env.N8N_WEBHOOK_BASE_URL
-  if (webhookUrl) {
-    await fetch(`${webhookUrl}/webhooks/client-onboarding`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-webhook-secret': process.env.WEBHOOK_SECRET ?? '',
-      },
-      body: JSON.stringify({ client_id: clientId }),
-    }).catch(() => null)
-  }
 }

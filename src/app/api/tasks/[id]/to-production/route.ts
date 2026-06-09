@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
 import { notifyUser, notifyAdmin, TG } from '@/lib/telegram'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await params
 
   const service = await createServiceClient()
 
@@ -28,7 +28,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const now = new Date().toISOString()
 
-  const { error: taskErr } = await service
+  const { data: updated, error: taskErr } = await service
     .from('content_tasks')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({
@@ -37,8 +37,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       updated_at: now,
     } as any)
     .eq('id', id)
+    .eq('status', 'approved_idea')
+    .select('id')
 
   if (taskErr) return NextResponse.json({ error: taskErr.message }, { status: 500 })
+  if (!updated || updated.length === 0) {
+    return NextResponse.json({ error: 'Estado inválido para enviar a producción' }, { status: 409 })
+  }
 
   if (task.idea_id) {
     await service

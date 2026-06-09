@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
+import { createSignedDownloadUrls } from '@/lib/upload/signed-download'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['editor', 'grabador'] })
+  if (!access.ok) return access.response
 
   const service = await createServiceClient()
 
@@ -22,9 +23,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: assets } = await service
     .from('assets')
-    .select('id, file_name, public_url, file_size, created_at')
+    .select('id, file_name, storage_path, file_size, created_at')
     .in('id', ids)
     .order('created_at', { ascending: true })
 
-  return NextResponse.json({ brutos: assets ?? [] })
+  const signed = await createSignedDownloadUrls((assets ?? []).map((a) => a.storage_path))
+  const brutos = (assets ?? []).map((a) => ({
+    id: a.id,
+    file_name: a.file_name,
+    file_size: a.file_size,
+    created_at: a.created_at,
+    signed_url: signed.get(a.storage_path) ?? null,
+  }))
+
+  return NextResponse.json({ brutos })
 }

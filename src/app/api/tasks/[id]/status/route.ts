@@ -1,15 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
+
+/**
+ * Transiciones de estado permitidas (from -> [to válidos]) según el lifecycle
+ * de contenido. Cualquier estado puede pasar a 'discarded' (lo controla el admin).
+ */
+const ALLOWED: Record<string, string[]> = {
+  idea: ['approved_idea', 'discarded'],
+  suggested: ['approved_idea', 'discarded'],
+  approved_idea: ['brief_sent', 'discarded'],
+  brief_sent: ['recording', 'discarded'],
+  recording: ['brutos_ready', 'discarded'],
+  brutos_ready: ['editing', 'discarded'],
+  editing: ['delivered', 'discarded'],
+  delivered: ['revision', 'approved', 'discarded'],
+  revision: ['editing', 'discarded'],
+  approved: ['scheduled', 'discarded'],
+  scheduled: ['published', 'failed', 'discarded'],
+  published: ['discarded'],
+  failed: ['discarded'],
+  discarded: [],
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await params
 
   const body = await request.json() as { status: string; publish_at?: string }
   if (!body.status) return NextResponse.json({ error: 'status required' }, { status: 400 })
+
+  const supabase = await createServiceClient()
+
+  const { data: current } = await supabase
+    .from('content_tasks')
+    .select('status')
+    .eq('id', id)
+    .single()
+
+  if (!current) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+  const from = (current as { status: string }).status
+  // Permitir un no-op (mismo estado) y bloquear transiciones no listadas.
+  if (body.status !== from && !(ALLOWED[from] ?? []).includes(body.status)) {
+    return NextResponse.json(
+      { error: `Transición de estado inválida: ${from} → ${body.status}` },
+      { status: 409 },
+    )
+  }
 
   const updates: Record<string, string> = {
     status: body.status,

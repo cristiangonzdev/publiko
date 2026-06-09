@@ -27,7 +27,7 @@ const DEADLINE_COLOR = (deadline: string | null) => {
 interface Bruto {
   id: string
   file_name: string
-  public_url: string | null
+  signed_url: string | null
   file_size: number | null
 }
 
@@ -239,7 +239,7 @@ export function EditorKanban({ initialTasks }: Props) {
                               {taskBrutos.map((b) => (
                                 <a
                                   key={b.id}
-                                  href={b.public_url ?? '#'}
+                                  href={b.signed_url ?? '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-between gap-2 py-1 text-xs text-brand hover:underline"

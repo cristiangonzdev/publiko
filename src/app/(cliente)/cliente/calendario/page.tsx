@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
+import { formatMadrid, madridDateKey } from '@/lib/datetime'
 
 export default async function ClienteCalendarioPage() {
   const { user } = await getAuthUser()
@@ -69,7 +70,7 @@ export default async function ClienteCalendarioPage() {
   for (const p of posts) {
     const date = p.scheduled_at ?? p.published_at
     if (!date) continue
-    addToDay(date.slice(0, 10), {
+    addToDay(madridDateKey(date), {
       id: p.id, type: 'post',
       label: p.copy?.slice(0, 80) ?? '',
       platform: p.platform, status: p.status,
@@ -78,7 +79,7 @@ export default async function ClienteCalendarioPage() {
   }
   for (const t of tasks) {
     if (!t.publish_at) continue
-    addToDay(t.publish_at.slice(0, 10), {
+    addToDay(madridDateKey(t.publish_at), {
       id: t.id, type: 'task',
       label: t.title,
       platforms: t.target_platforms as string[],
@@ -110,8 +111,7 @@ export default async function ClienteCalendarioPage() {
           <p className="text-sm text-ink-400 mt-4">Sin contenido programado en los próximos 2 meses.</p>
         )}
         {Object.entries(byDay).map(([day, items]) => {
-          const date = new Date(day + 'T12:00:00')
-          const label = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+          const label = formatMadrid(`${day}T12:00:00Z`, { weekday: 'long', day: 'numeric', month: 'long' })
           return (
             <div key={day} className="rounded-xl border border-ink-200 bg-white overflow-hidden">
               <div className="border-b border-ink-100 bg-ink-50 px-4 py-2">
@@ -136,7 +136,7 @@ export default async function ClienteCalendarioPage() {
                           {item.status}
                         </span>
                         <span className="text-[10px] text-ink-400">
-                          {new Date(item.time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          {formatMadrid(item.time, { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </div>

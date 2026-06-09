@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { notifyAdmin, TG } from '@/lib/telegram'
 import { createNotification, notifTitle } from '@/lib/notifications'
 
@@ -8,9 +9,8 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['editor'] })
+  if (!access.ok) return access.response
 
   const { path, file_name, file_type, file_size } = await request.json() as {
     path?: string
@@ -29,7 +29,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .single()
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(path)
+  if (!path.startsWith(`deliverables/${task.client_id}/${id}/`) || path.includes('..')) {
+    return NextResponse.json({ error: 'Ruta de archivo inválida' }, { status: 400 })
+  }
 
   const { data: asset, error: assetError } = await service
     .from('assets')
@@ -40,9 +42,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       file_size: file_size ?? null,
       storage_type: 'supabase',
       storage_path: path,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: 'deliverable',
-      uploaded_by: user.id,
+      uploaded_by: access.ctx.userId,
     })
     .select('id')
     .single()
@@ -85,5 +87,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     )
   )
 
-  return NextResponse.json({ asset_id: asset.id, public_url: publicUrl })
+  return NextResponse.json({ asset_id: asset.id })
 }

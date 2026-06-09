@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
 import { replyReview } from '@/lib/gmb'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
+
   const { id } = await params
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { response } = (await request.json()) as { response: string }
   if (!response?.trim()) return NextResponse.json({ error: 'response required' }, { status: 400 })
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .update({
       response_selected: response,
       response_published_at: new Date().toISOString(),
-      responded_by: user.id,
+      responded_by: auth.ctx.userId,
       status: 'responded',
       updated_at: new Date().toISOString(),
     })

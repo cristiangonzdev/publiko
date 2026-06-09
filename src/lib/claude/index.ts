@@ -5,8 +5,51 @@ export type { FewShotExample }
 
 const client = new Anthropic()
 
-function stripMarkdown(text: string): string {
+/** ADR-004: Sonnet for creative generation, Haiku for rubric/scoring tasks. */
+export const MODEL_SONNET = 'claude-sonnet-4-6'
+export const MODEL_HAIKU = 'claude-haiku-4-5-20251001'
+
+export function stripMarkdown(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+}
+
+/**
+ * Standard Claude call returning parsed JSON. Adds: prompt caching on the
+ * (large, repeated) system prompt, a check for truncated output, and one
+ * re-ask retry on a JSON parse failure so a single malformed response doesn't
+ * silently drop a client's content.
+ */
+export async function callClaudeJSON<T>(params: {
+  max_tokens: number
+  messages: Anthropic.MessageParam[]
+  system?: string
+  model?: string
+  cacheSystem?: boolean
+}): Promise<T> {
+  const { max_tokens, messages, system, model = MODEL_SONNET, cacheSystem } = params
+  const systemParam: Anthropic.MessageCreateParams['system'] | undefined = system
+    ? cacheSystem
+      ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+      : system
+    : undefined
+
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await client.messages.create({ model, max_tokens, system: systemParam, messages })
+    if (response.stop_reason === 'max_tokens') {
+      lastError = new Error('Respuesta de Claude truncada (max_tokens)')
+      continue
+    }
+    const raw = response.content[0]?.type === 'text' ? response.content[0].text : ''
+    try {
+      return JSON.parse(stripMarkdown(raw)) as T
+    } catch (e) {
+      lastError = e
+    }
+  }
+  throw new Error(
+    `Claude JSON inválido tras reintento: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+  )
 }
 
 export interface WinningPatternForPrompt {
@@ -142,9 +185,9 @@ export async function generateWeeklyIdeas(
   recentIdeas: Array<Record<string, unknown>>,
   weekContext: string
 ): Promise<GeneratedIdeas> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<GeneratedIdeas>({
     max_tokens: 2000,
+    cacheSystem: true,
     system: buildSystemPrompt({ ...brandBrain, performance_learning: { ...((brandBrain.performance_learning as Record<string, unknown>) ?? {}), recent_ideas: recentIdeas } }),
     messages: [
       {
@@ -168,9 +211,6 @@ Responde SOLO con JSON válido, sin markdown, sin texto extra:
       },
     ],
   })
-
-    const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  return JSON.parse(text) as GeneratedIdeas
 }
 
 export async function generateCopyOptions(
@@ -178,9 +218,9 @@ export async function generateCopyOptions(
   idea: Record<string, unknown>,
   fewShotExamples: FewShotExample[] = [],
 ): Promise<{ copy: string; hashtags: string[]; cta: string }[]> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<{ copy: string; hashtags: string[]; cta: string }[]>({
     max_tokens: 1500,
+    cacheSystem: true,
     system: buildSystemPrompt(brandBrain),
     messages: [
       ...buildFewShotMessages(fewShotExamples),
@@ -197,9 +237,6 @@ Responde SOLO en JSON: [{"copy":"","hashtags":[],"cta":""}]`,
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
-  return JSON.parse(text)
 }
 
 export async function generateBriefs(
@@ -214,9 +251,9 @@ export async function generateBriefs(
   const music = (visual.music_style as Record<string, unknown>) ?? {}
   const photo = (visual.photo_style as Record<string, unknown>) ?? {}
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<{ recording_brief: Record<string, unknown>; editing_brief: Record<string, unknown> }>({
     max_tokens: 2000,
+    cacheSystem: true,
     system: buildSystemPrompt(brandBrain),
     messages: [
       {
@@ -263,9 +300,6 @@ Responde SOLO en JSON válido.`,
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  return JSON.parse(text)
 }
 
 // ============================================================================
@@ -303,9 +337,9 @@ export async function generateDailyBatch(
   const autoTypes = config.auto_tier_content_types ?? []
   const hours = config.publish_hours ?? ['09:00', '14:00', '20:00']
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4000,
+  const parsed = await callClaudeJSON<{ ideas: DailyIdeaDraft[] }>({
+    max_tokens: 8000,
+    cacheSystem: true,
     system: buildSystemPrompt({ ...brandBrain, performance_learning: { ...((brandBrain.performance_learning as Record<string, unknown>) ?? {}), recent_ideas: recentIdeas } }),
     messages: [
       {
@@ -332,9 +366,6 @@ Responde SOLO con JSON válido, sin markdown:
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  const parsed = JSON.parse(text) as { ideas: DailyIdeaDraft[] }
   return parsed.ideas ?? []
 }
 
@@ -346,9 +377,9 @@ export async function generateCopiesPerPlatform(
 ): Promise<Record<string, { copy: string; hashtags: string[]; cta: string }>> {
   if (platforms.length === 0) return {}
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<Record<string, { copy: string; hashtags: string[]; cta: string }>>({
     max_tokens: 1500,
+    cacheSystem: true,
     system: buildSystemPrompt(brandBrain),
     messages: [
       ...buildFewShotMessages(fewShotExamples),
@@ -376,9 +407,6 @@ JSON: {${platforms.map((p) => `"${p}":{"copy":"","hashtags":[],"cta":""}`).join(
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  return JSON.parse(text)
 }
 
 export interface JudgeAxes {
@@ -439,8 +467,8 @@ CRITERIOS DE RECHAZO (cualquiera basta para passes=false):
 - Contenido sensible (precios, promesas legales, salud, política) → passes=false
 - Gancho débil o sin gancho en las primeras líneas → hook_strength bajo`
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<JudgeVerdict>({
+    model: MODEL_HAIKU,
     max_tokens: 1000,
     system: `Eres un revisor de marca riguroso. Evalúas contenido en 5 ejes y determinas si puede auto-publicarse.
 
@@ -491,9 +519,6 @@ Responde SOLO en JSON válido:
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  return JSON.parse(text) as JudgeVerdict
 }
 
 export async function generateReviewResponse(
@@ -504,9 +529,10 @@ export async function generateReviewResponse(
   const ops = (brandBrain.operations as Record<string, unknown>) ?? {}
   const reviewTone = (ops.booking as Record<string, string>)?.booking_cta ?? 'cercano y profesional'
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<string[]>({
+    model: MODEL_HAIKU,
     max_tokens: 600,
+    cacheSystem: true,
     system: buildSystemPrompt(brandBrain),
     messages: [
       {
@@ -521,9 +547,6 @@ Genera 2 opciones de respuesta cortas y naturales. JSON: ["respuesta1","respuest
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
-  return JSON.parse(text)
 }
 
 // ============================================================================
@@ -547,8 +570,8 @@ export async function generateGeoQueries(
   const subsector = id.subsector ?? ''
   const priceTier = id.price_tier ?? ''
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<string[]>({
+    model: MODEL_HAIKU,
     max_tokens: 400,
     messages: [
       {
@@ -565,9 +588,6 @@ Responde SOLO con JSON: ["consulta1","consulta2","consulta3","consulta4","consul
       },
     ],
   })
-
-  const textGeo = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
-  return JSON.parse(textGeo) as string[]
 }
 
 export async function simulateGeoQuery(
@@ -578,8 +598,13 @@ export async function simulateGeoQuery(
   const businessName = id.business_name ?? ''
   const oneLiner = id.one_liner ?? ''
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  const raw = await callClaudeJSON<{
+    response_excerpt: string
+    brand_mentioned: boolean
+    brand_position: number | null
+    brand_sentiment: 'positive' | 'neutral' | 'negative' | null
+  }>({
+    model: MODEL_HAIKU,
     max_tokens: 600,
     system: `Eres un asistente de IA generalista que responde preguntas sobre negocios locales de forma natural y útil.`,
     messages: [
@@ -598,14 +623,6 @@ brand_position = orden si se menciona (1=primero), null si no. brand_sentiment =
       },
     ],
   })
-
-  const textSnap = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '{}')
-  const raw = JSON.parse(textSnap) as {
-    response_excerpt: string
-    brand_mentioned: boolean
-    brand_position: number | null
-    brand_sentiment: 'positive' | 'neutral' | 'negative' | null
-  }
 
   return {
     query,
@@ -634,8 +651,7 @@ export async function generateBrainRefinementProposal(
     winning_patterns_summary: string
   },
 ): Promise<BrainRevisionProposal[]> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  return callClaudeJSON<BrainRevisionProposal[]>({
     max_tokens: 2000,
     system: `Eres un estratega de contenido con acceso al perfil completo de una marca y sus resultados reales de los últimos 30 días. Tu objetivo: proponer actualizaciones concretas al Brand Brain que mejorarían el rendimiento futuro del contenido.`,
     messages: [
@@ -668,9 +684,6 @@ Responde SOLO con JSON:
       },
     ],
   })
-
-  const text = stripMarkdown(response.content[0].type === 'text' ? response.content[0].text : '[]')
-  return JSON.parse(text) as BrainRevisionProposal[]
 }
 
 export function buildGeoSystemPromptAddition(location: string): string {

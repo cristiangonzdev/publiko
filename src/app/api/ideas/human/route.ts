@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { buildSystemPrompt } from '@/lib/claude'
+import { requireAdmin } from '@/lib/auth/guards'
 
 const ai = new Anthropic()
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
   const { client_id, human_input, content_type } = await request.json() as {
     client_id: string

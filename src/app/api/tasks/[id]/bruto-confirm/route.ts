@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
+import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 import { notifyUser, notifyAdmin, TG } from '@/lib/telegram'
 import { createNotification, notifTitle } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function isSafeBrutoPath(path: string, clientId: string, taskId: string): boolean {
+  // El path debe vivir bajo el prefijo del cliente/tarea y no escapar con ../
+  return path.startsWith(`brutos/${clientId}/${taskId}/`) && !path.includes('..')
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['grabador'] })
+  if (!access.ok) return access.response
 
   const { path, file_name, file_type, file_size } = await request.json() as {
     path?: string
@@ -24,12 +30,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { data: task } = await service
     .from('content_tasks')
-    .select('id, client_id, title, editor_id, bruto_asset_ids, clients!inner(business_name)')
+    .select('id, client_id, title, editor_id, clients!inner(business_name)')
     .eq('id', id)
     .single()
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(path)
+  if (!isSafeBrutoPath(path, task.client_id, id)) {
+    return NextResponse.json({ error: 'Ruta de archivo inválida' }, { status: 400 })
+  }
 
   const { data: asset, error: assetError } = await service
     .from('assets')
@@ -40,9 +48,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       file_size: file_size ?? null,
       storage_type: 'supabase',
       storage_path: path,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: 'bruto',
-      uploaded_by: user.id,
+      uploaded_by: access.ctx.userId,
     })
     .select('id')
     .single()
@@ -51,20 +59,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: assetError?.message ?? 'asset insert failed' }, { status: 500 })
   }
 
-  const existingIds = (task.bruto_asset_ids as string[]) ?? []
-  const newIds = [...existingIds, asset.id]
-
+  // Append atómico (evita perder ids con subidas en paralelo) + marca brutos_ready
+  await service.rpc('append_bruto_asset', { p_task_id: id, p_asset_id: asset.id })
   await service
     .from('content_tasks')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({
-      bruto_asset_ids: newIds,
-      status: 'brutos_ready',
-      brutos_uploaded_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any)
+    .update({ status: 'brutos_ready', updated_at: new Date().toISOString() })
     .eq('id', id)
 
+  const signedUrl = await createSignedDownloadUrl(path)
   const businessName = (task.clients as unknown as { business_name: string })?.business_name ?? ''
 
   if (task.editor_id) {
@@ -85,5 +87,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   await notifyAdmin(TG.brutosListos(businessName, task.title))
 
-  return NextResponse.json({ asset_id: asset.id, public_url: publicUrl })
+  return NextResponse.json({ asset_id: asset.id, signed_url: signedUrl })
 }

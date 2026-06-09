@@ -1,12 +1,23 @@
+import { logError } from '@/lib/observability'
+
 const BASE = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`
 
 async function send(chatId: string, text: string) {
   if (!process.env.TELEGRAM_BOT_TOKEN || !chatId) return
-  await fetch(`${BASE}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-  }).catch(() => null)
+  try {
+    const res = await fetch(`${BASE}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+    })
+    if (!res.ok) {
+      // El canal de alertas no debe romper el flujo principal, pero el fallo
+      // sí se registra (antes se tragaba en silencio).
+      logError('telegram.send', new Error(`Telegram ${res.status}: ${await res.text().catch(() => '')}`))
+    }
+  } catch (err) {
+    logError('telegram.send', err)
+  }
 }
 
 export async function notifyAdmin(text: string) {

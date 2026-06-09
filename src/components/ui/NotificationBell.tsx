@@ -54,11 +54,22 @@ export function NotificationBell() {
     } catch { /* silencioso */ }
   }, [])
 
-  // Carga inicial + polling cada 30s
+  // Carga inicial + polling cada 60s. Se pausa cuando la pestaña está oculta
+  // (no malgasta invocaciones de función/BD con tabs en segundo plano) y
+  // refresca al volver a primer plano.
   useEffect(() => {
     void fetchNotifs()
-    const id = setInterval(fetchNotifs, 30_000)
-    return () => clearInterval(id)
+    const id = setInterval(() => {
+      if (!document.hidden) void fetchNotifs()
+    }, 60_000)
+    const onVisible = () => {
+      if (!document.hidden) void fetchNotifs()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fetchNotifs])
 
   // Cerrar al click fuera

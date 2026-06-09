@@ -58,15 +58,28 @@ export function ReviewList({ initialItems }: Props) {
     }
   }
 
-  const updatePublishAt = async (taskId: string) => {
+  const schedule = async (taskId: string) => {
     const dt = publishAt[taskId]
-    if (!dt) return
-    await fetch(`/api/tasks/${taskId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'approved', publish_at: dt }),
-    })
-    setItems((prev) => prev.map((i) => i.id === taskId ? { ...i, publish_at: dt } : i))
+    if (!dt) { alert('Elige una fecha de publicación'); return }
+    setLoading(taskId)
+    try {
+      // El <input datetime-local> da hora local del navegador (Madrid para el equipo);
+      // se envía como ISO y el backend la guarda como instante.
+      const res = await fetch(`/api/tasks/${taskId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publish_at: new Date(dt).toISOString() }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: 'Error al programar' }))
+        alert(error ?? 'Error al programar')
+        return
+      }
+      // Programada: sale de la cola de revisión.
+      setItems((prev) => prev.filter((i) => i.id !== taskId))
+    } finally {
+      setLoading(null)
+    }
   }
 
   if (items.length === 0) {
@@ -143,10 +156,11 @@ export function ReviewList({ initialItems }: Props) {
                     className="flex-1 rounded border border-ink-200 px-3 py-1.5 text-sm"
                   />
                   <button
-                    onClick={() => updatePublishAt(item.id)}
-                    className="rounded bg-ink-100 px-3 py-1.5 text-xs text-ink-600 hover:bg-ink-200"
+                    onClick={() => schedule(item.id)}
+                    disabled={loading === item.id}
+                    className="rounded bg-teal-600 px-3 py-1.5 text-xs text-white hover:bg-teal-700 disabled:opacity-50"
                   >
-                    Guardar
+                    Programar
                   </button>
                 </div>
               </div>

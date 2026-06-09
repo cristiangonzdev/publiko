@@ -9,6 +9,8 @@ import {
 } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
+import { madridWallTimeToUtcISO } from '@/lib/datetime'
+import { schedulePostsForTask } from '@/lib/posts/schedule'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -160,32 +162,63 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const effectivePasses = verdict.passes && verdict.confidence !== 'low' && !verdict.similarity_flag
 
   if (effectivePasses) {
-    // Pick publish_at from suggested time (stored in idea.human_input) or default to 12:00 today
-    const suggestedTime = (idea.human_input as string | null) ?? '12:00'
-    const [hh, mm] = suggestedTime.split(':').map((n) => parseInt(n, 10))
-    const publishAt = new Date()
-    publishAt.setHours(isNaN(hh) ? 12 : hh, isNaN(mm) ? 0 : mm, 0, 0)
-    // If already past, push to tomorrow
-    if (publishAt.getTime() < Date.now()) publishAt.setDate(publishAt.getDate() + 1)
+    // Hora sugerida (Madrid) → UTC. Empuja a mañana si ya pasó.
+    const suggestedTime = (idea.suggested_publish_time as string | null) ?? '12:00'
+    const publishAtIso = madridWallTimeToUtcISO(suggestedTime)
+
+    // El auto-tier necesita un asset para publicar. Si no se grabó/editó nada,
+    // usamos el b-roll más reciente del cliente; si no hay, NO se agenda (se
+    // queda aprobado y se avisa al admin) — antes agendaba sin media y el
+    // publish fallaba siempre.
+    const { data: broll } = await service
+      .from('assets')
+      .select('id')
+      .eq('client_id', idea.client_id)
+      .eq('asset_category', 'b_roll')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!broll?.id) {
+      await service
+        .from('content_tasks')
+        .update({
+          status: 'approved',
+          publish_at: publishAtIso,
+          approved_at: new Date().toISOString(),
+          auto_publish_blocked_reason: 'Auto-aprobado por el juez, pero falta media. Sube un b-roll o produce la pieza para programarla.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', task.id)
+      await service.from('content_ideas').update({ status: 'approved' }).eq('id', id)
+      const businessName = (idea.clients as unknown as { business_name: string })?.business_name ?? ''
+      await notifyAdmin(`✅ <b>Auto-aprobado (sin media)</b>\n\n${businessName}\n${idea.concept}\n\nEl juez lo aprobó pero no hay b-roll para publicar. Súbelo o prográmalo a mano.`)
+      return NextResponse.json({ ok: true, task_id: task.id, scheduled_for: null, awaiting_media: true, verdict })
+    }
 
     await service
       .from('content_tasks')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .update({
-        status: 'scheduled',
-        publish_at: publishAt.toISOString(),
+        final_asset_id: broll.id,
+        publish_at: publishAtIso,
         approved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      } as any)
+      })
       .eq('id', task.id)
+
+    const sched = await schedulePostsForTask(service, task.id)
+    if (sched.error) {
+      await notifyAdmin(`⚠️ <b>Auto-tier: no se pudo programar</b>\n\n${idea.concept}\n${sched.error}`)
+      return NextResponse.json({ ok: true, task_id: task.id, scheduled_for: null, schedule_error: sched.error, verdict })
+    }
 
     await service
       .from('content_ideas')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ status: 'in_production' } as any)
+      .update({ status: 'in_production' })
       .eq('id', id)
 
-    return NextResponse.json({ ok: true, task_id: task.id, scheduled_for: publishAt.toISOString(), verdict })
+    return NextResponse.json({ ok: true, task_id: task.id, scheduled_for: publishAtIso, posts_created: sched.created, verdict })
   }
 
   // Judge failed — flag for admin

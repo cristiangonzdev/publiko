@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { notifyAdmin, TG } from '@/lib/telegram'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const form = await request.formData()
   const file = form.get('file') as File | null
   const taskId = form.get('task_id') as string | null
@@ -14,6 +11,9 @@ export async function POST(request: NextRequest) {
   if (!file || !taskId) {
     return NextResponse.json({ error: 'file and task_id required' }, { status: 400 })
   }
+
+  const access = await requireTaskAccess(taskId, { roles: ['editor'] })
+  if (!access.ok) return access.response
 
   const service = await createServiceClient()
 
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  const ext = file.name.split('.').pop() ?? 'mp4'
+  const ext = (file.name.split('.').pop() ?? 'mp4').replace(/[^a-zA-Z0-9]/g, '')
   const storagePath = `deliverables/${task.client_id}/${taskId}/final.${ext}`
 
   const { error: uploadError } = await service.storage
@@ -38,8 +38,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 })
   }
 
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(storagePath)
-
   const { data: asset } = await service
     .from('assets')
     .insert({
@@ -49,9 +47,9 @@ export async function POST(request: NextRequest) {
       file_size: file.size,
       storage_type: 'supabase',
       storage_path: storagePath,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: 'deliverable',
-      uploaded_by: user.id,
+      uploaded_by: access.ctx.userId,
     })
     .select('id')
     .single()
@@ -69,5 +67,5 @@ export async function POST(request: NextRequest) {
   const businessName = (task.clients as unknown as { business_name: string })?.business_name ?? ''
   await notifyAdmin(TG.entregadoAdmin(businessName, task.title))
 
-  return NextResponse.json({ ok: true, asset_id: asset?.id, public_url: publicUrl })
+  return NextResponse.json({ ok: true, asset_id: asset?.id })
 }

@@ -44,87 +44,134 @@ export async function POST(request: NextRequest) {
         pageSize: 50,
       })
 
-      for (const review of reviews) {
-        const externalId = review.reviewId
-        const rating = reviewStarsToNumber(review.starRating)
-        const text = review.comment ?? ''
-        const authorName = review.reviewer?.displayName ?? 'Anónimo'
-        const reviewDate = review.createTime
+      if (reviews.length === 0) continue
 
-        // Si ya existe, actualizar respuesta publicada en caso de cambios externos
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: existing } = await (supabase.from('reviews') as any)
-          .select('id, status, ai_draft')
-          .eq('client_id', client.id)
-          .eq('external_review_id', externalId)
-          .maybeSingle() as { data: { id: string; status: string; ai_draft: string | null } | null }
+      const externalIds = reviews.map((r) => r.reviewId)
 
-        if (existing) {
-          // si ya tenía respuesta externa y ahora aparece reviewReply, marcar como respondida
-          if (review.reviewReply && existing.status !== 'responded') {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('reviews') as any)
-              .update({
-                status: 'responded',
-                response_selected: review.reviewReply.comment,
-                response_published_at: review.reviewReply.updateTime,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existing.id)
-          }
-          continue
+      // Índice de control: UNA query por cliente en lugar de una por reseña (evita N+1).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingRows, error: existingErr } = await (supabase.from('reviews') as any)
+        .select('id, external_review_id, status')
+        .eq('client_id', client.id)
+        .in('external_review_id', externalIds) as {
+          data: { id: string; external_review_id: string; status: string }[] | null
+          error: { message: string } | null
         }
 
-        // Insert nueva reseña
+      if (existingErr) {
+        errors.push(`${client.business_name}: load existing reviews: ${existingErr.message}`)
+        continue
+      }
+
+      const existingById = new Map(
+        (existingRows ?? []).map((r) => [r.external_review_id, r]),
+      )
+
+      // Reseñas que ya tenían fila pero ahora aparecen respondidas externamente.
+      const toMarkResponded = reviews.filter((review) => {
+        const existing = existingById.get(review.reviewId)
+        return existing && review.reviewReply && existing.status !== 'responded'
+      })
+
+      for (const review of toMarkResponded) {
+        const existing = existingById.get(review.reviewId)!
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: inserted } = await (supabase.from('reviews') as any)
-          .insert({
-            client_id: client.id,
-            source: 'gmb',
-            external_id: externalId,
-            external_review_id: externalId,
-            author_name: authorName,
-            rating,
-            text,
-            review_date: reviewDate,
-            status: review.reviewReply ? 'responded' : 'pending',
-            response_selected: review.reviewReply?.comment ?? null,
-            response_published_at: review.reviewReply?.updateTime ?? null,
+        const { error: updErr } = await (supabase.from('reviews') as any)
+          .update({
+            status: 'responded',
+            response_selected: review.reviewReply!.comment,
+            response_published_at: review.reviewReply!.updateTime,
+            updated_at: new Date().toISOString(),
           })
-          .select('id')
-          .single() as { data: { id: string } | null }
+          .eq('id', existing.id)
+        if (updErr) errors.push(`${client.business_name}: mark responded ${review.reviewId}: ${updErr.message}`)
+      }
 
-        if (!inserted) continue
-        totalNew++
+      // Reseñas realmente nuevas: insertarlas en bloque con upsert idempotente.
+      const newReviews = reviews.filter((review) => !existingById.has(review.reviewId))
+      if (newReviews.length === 0) continue
 
-        // Generar borrador con Claude solo si está pendiente
-        if (!review.reviewReply && text.trim()) {
-          try {
-            const { data: brain } = await supabase
-              .from('brand_brains')
-              .select('*')
-              .eq('client_id', client.id)
-              .single()
+      const rowsToInsert = newReviews.map((review) => {
+        const externalId = review.reviewId
+        return {
+          client_id: client.id,
+          source: 'gmb',
+          external_id: externalId,
+          external_review_id: externalId,
+          author_name: review.reviewer?.displayName ?? 'Anónimo',
+          rating: reviewStarsToNumber(review.starRating),
+          text: review.comment ?? '',
+          review_date: review.createTime,
+          status: review.reviewReply ? 'responded' : 'pending',
+          response_selected: review.reviewReply?.comment ?? null,
+          response_published_at: review.reviewReply?.updateTime ?? null,
+        }
+      })
 
-            if (brain) {
-              const options = await generateReviewResponse(
-                brain as unknown as Record<string, unknown>,
-                { author_name: authorName, rating, text },
-              )
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabase.from('reviews') as any)
-                .update({
-                  response_options: options,
-                  ai_draft: options[0] ?? null,
-                  ai_draft_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', inserted.id)
-              totalDrafts++
-            }
-          } catch (err) {
-            console.error('AI draft failed for review', externalId, err)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: insertedRows, error: insertErr } = await (supabase.from('reviews') as any)
+        .upsert(rowsToInsert, { onConflict: 'client_id,external_review_id' })
+        .select('id, external_review_id') as {
+          data: { id: string; external_review_id: string }[] | null
+          error: { message: string } | null
+        }
+
+      if (insertErr) {
+        errors.push(`${client.business_name}: insert reviews: ${insertErr.message}`)
+        continue
+      }
+
+      const insertedById = new Map(
+        (insertedRows ?? []).map((r) => [r.external_review_id, r.id]),
+      )
+      totalNew += insertedRows?.length ?? 0
+
+      // Generar borrador IA SOLO para reseñas realmente nuevas y pendientes.
+      const pendingForDraft = newReviews.filter(
+        (review) => !review.reviewReply && (review.comment ?? '').trim(),
+      )
+      if (pendingForDraft.length === 0) continue
+
+      // El Brand Brain se carga una sola vez por cliente.
+      const { data: brain, error: brainErr } = await supabase
+        .from('brand_brains')
+        .select('*')
+        .eq('client_id', client.id)
+        .single()
+
+      if (brainErr || !brain) {
+        if (brainErr) errors.push(`${client.business_name}: load brain: ${brainErr.message}`)
+        continue
+      }
+
+      for (const review of pendingForDraft) {
+        const reviewId = insertedById.get(review.reviewId)
+        if (!reviewId) continue
+        try {
+          const options = await generateReviewResponse(
+            brain as unknown as Record<string, unknown>,
+            {
+              author_name: review.reviewer?.displayName ?? 'Anónimo',
+              rating: reviewStarsToNumber(review.starRating),
+              text: review.comment ?? '',
+            },
+          )
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: draftErr } = await (supabase.from('reviews') as any)
+            .update({
+              response_options: options,
+              ai_draft: options[0] ?? null,
+              ai_draft_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', reviewId)
+          if (draftErr) {
+            errors.push(`${client.business_name}: save draft ${review.reviewId}: ${draftErr.message}`)
+          } else {
+            totalDrafts++
           }
+        } catch (err) {
+          console.error('AI draft failed for review', review.reviewId, err)
         }
       }
     } catch (err) {

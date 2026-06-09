@@ -8,9 +8,9 @@ Sistema operativo de una agencia de gestión de redes sociales: multi-rol (admin
 
 - **Web:** Next.js 16 (App Router) + TypeScript + Tailwind CSS
 - **Backend / DB / Auth / Storage:** Supabase
-- **Orquestación:** n8n (self-hosted)
-- **IA:** Anthropic Claude (`claude-sonnet-4-20250514`)
-- **Publicación:** Meta Graph API, TikTok API
+- **Orquestación:** Vercel Crons + API routes (n8n es solo referencia histórica)
+- **IA:** Anthropic Claude (`claude-sonnet-4-6`; juez/geo/reseñas en `claude-haiku-4-5`)
+- **Publicación:** Meta Graph API (Instagram, Facebook, GMB)
 - **Email:** Resend · **Notif. internas:** Telegram
 
 ## Arrancar en local
