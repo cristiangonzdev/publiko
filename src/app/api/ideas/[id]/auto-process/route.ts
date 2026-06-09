@@ -138,6 +138,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     verdict = {
       passes: false,
       score: 0,
+      confidence: 'low',
+      axes: { voice_fidelity: 0, hook_strength: 0, cta_clarity: 0, originality: 0, platform_nativity: 0 },
+      similarity_flag: false,
       issues: [`Judge error: ${err instanceof Error ? err.message : String(err)}`],
       reasoning: 'Could not run judge — defaulting to manual review.',
     }
@@ -153,7 +156,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq('id', task.id)
 
   // 5. Schedule or route to manual review
-  if (verdict.passes) {
+  // Additional gates: low confidence or similarity always escalates to human
+  const effectivePasses = verdict.passes && verdict.confidence !== 'low' && !verdict.similarity_flag
+
+  if (effectivePasses) {
     // Pick publish_at from suggested time (stored in idea.human_input) or default to 12:00 today
     const suggestedTime = (idea.human_input as string | null) ?? '12:00'
     const [hh, mm] = suggestedTime.split(':').map((n) => parseInt(n, 10))
@@ -183,18 +189,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   // Judge failed — flag for admin
+  const blockedReasons = [...verdict.issues]
+  if (verdict.confidence === 'low') blockedReasons.push(`Confianza baja del juez (${verdict.confidence})`)
+  if (verdict.similarity_flag) blockedReasons.push('Concepto demasiado similar a contenido reciente')
+
   await service
     .from('content_tasks')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({
-      auto_publish_blocked_reason: verdict.issues.join('; '),
+      auto_publish_blocked_reason: blockedReasons.join('; '),
       updated_at: new Date().toISOString(),
     } as any)
     .eq('id', task.id)
 
+  const axesSummary = verdict.axes
+    ? `Ejes: voz=${(verdict.axes.voice_fidelity * 10).toFixed(0)}/10 · hook=${(verdict.axes.hook_strength * 10).toFixed(0)}/10 · cta=${(verdict.axes.cta_clarity * 10).toFixed(0)}/10`
+    : ''
   const businessName = (idea.clients as unknown as { business_name: string })?.business_name ?? ''
   await notifyAdmin(
-    `⚠️ <b>Auto-judge rechazó</b>\n\n${businessName}\n${idea.concept}\n\nMotivos:\n${verdict.issues.map((i) => `• ${i}`).join('\n')}\n\nRevisar manualmente.`,
+    `⚠️ <b>Auto-judge rechazó</b>\n\n${businessName}\n${idea.concept}\n\n${axesSummary}\nMotivos:\n${blockedReasons.map((i) => `• ${i}`).join('\n')}\n\nRevisar manualmente.`,
   )
 
   return NextResponse.json({ ok: true, task_id: task.id, scheduled_for: null, verdict })

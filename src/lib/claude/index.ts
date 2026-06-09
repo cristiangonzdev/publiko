@@ -378,10 +378,21 @@ JSON: {${platforms.map((p) => `"${p}":{"copy":"","hashtags":[],"cta":""}`).join(
   return JSON.parse(text)
 }
 
+export interface JudgeAxes {
+  voice_fidelity: number     // 0..1 — ¿suena como la marca?
+  hook_strength: number      // 0..1 — ¿el gancho engancha en 3s?
+  cta_clarity: number        // 0..1 — ¿el CTA es claro y accionable?
+  originality: number        // 0..1 — ¿es fresco? ¿no canibaliza contenido reciente?
+  platform_nativity: number  // 0..1 — ¿suena nativo para la plataforma?
+}
+
 export interface JudgeVerdict {
   passes: boolean
-  score: number          // 0..1
-  issues: string[]       // empty if passes
+  score: number                      // 0..1 (media de los ejes)
+  confidence: 'high' | 'medium' | 'low'
+  axes: JudgeAxes
+  similarity_flag: boolean           // true = demasiado similar a contenido reciente
+  issues: string[]
   reasoning: string
 }
 
@@ -399,47 +410,64 @@ export async function judgeContent(
   const voice = (brandBrain.voice as Record<string, unknown>) ?? {}
   const forbidden = ((voice.forbidden_words as string[]) ?? []).concat((voice.forbidden_topics as string[]) ?? [])
   const kind = payload.kind ?? (payload.content_type === 'story' ? 'story' : 'feed')
+  const learning = (brandBrain.performance_learning as Record<string, unknown>) ?? {}
+  const recentIdeas = (learning.recent_ideas as Array<Record<string, string>>) ?? []
+  const recentConcepts = recentIdeas
+    .filter((i) => i.status !== 'discarded')
+    .slice(0, 20)
+    .map((i) => `- [${i.format ?? i.content_type ?? '?'}] ${i.concept}`)
+    .join('\n')
 
   const storyRules = `
 CRITERIOS ESPECÍFICOS PARA STORIES (más permisivos que feed):
 - Tono coloquial y cercano OK — las stories son más informales que el feed
-- Copy MUY corto (≤ 80 caracteres ideal, máx 150). Si el copy es largo, rechaza.
-- Hashtags: 0 ideal, máx 2. Más hashtags = spam en story → rechaza.
-- CTA opcional (las stories tienen stickers de respuesta nativos)
-- Emojis OK con moderación
-- NUNCA aprobar stories con: precios concretos, promesas legales, descuentos sin verificar, anuncios de horario sin confirmar
-- IG ignora la caption de stories de todas formas — si el copy aporta información esencial al post, debería ser feed, no story → rechaza`
+- Copy MUY corto (≤ 80 caracteres ideal, máx 150). Si el copy es largo, eje hook_strength bajo.
+- Hashtags: 0 ideal, máx 2. Más hashtags = platform_nativity bajo.
+- CTA opcional (las stories tienen stickers nativos)
+- NUNCA aprobar stories con: precios concretos, promesas legales, descuentos sin verificar`
 
   const feedRules = `
-CRITERIOS DE RECHAZO (cualquiera basta):
-- Faltas de ortografía o gramaticales claras
-- Tono fuera de marca (genérico, robótico, demasiado formal o informal)
-- Uso de palabras/temas prohibidos
-- CTA confuso, ambiguo o ausente cuando hace falta
-- Hashtags spam, repetidos o irrelevantes
-- Contenido sensible (precios concretos, promesas legales, salud, política, religión) que necesita revisión humana
-- Mención de cantidades, fechas o datos sin verificar
-- Errores tipográficos o emojis fuera de estilo`
+CRITERIOS DE RECHAZO (cualquiera basta para passes=false):
+- Faltas de ortografía o gramaticales claras → voice_fidelity bajo
+- Tono genérico, robótico o fuera de marca → voice_fidelity bajo
+- Uso de palabras/temas prohibidos → voice_fidelity bajo, passes=false
+- CTA confuso, ambiguo o ausente → cta_clarity bajo
+- Hashtags spam, repetidos o irrelevantes → platform_nativity bajo
+- Contenido sensible (precios, promesas legales, salud, política) → passes=false
+- Gancho débil o sin gancho en las primeras líneas → hook_strength bajo`
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 800,
-    system: `Eres un revisor de marca riguroso. Tu trabajo: detectar contenido que NO debería auto-publicarse porque viola la voz, contiene errores, o es sensible.
+    max_tokens: 1000,
+    system: `Eres un revisor de marca riguroso. Evalúas contenido en 5 ejes y determinas si puede auto-publicarse.
 
-Marca: ${((brandBrain.identity as Record<string, string>) ?? {}).business_name ?? ''}
-Voz: ${((voice.personality_traits as string[]) ?? []).join(', ')}
-Anti-tono: ${voice.anti_tone ?? ''}
-Palabras/temas prohibidos: ${forbidden.join(', ') || 'ninguno'}
-Tipo de pieza: ${kind === 'story' ? 'STORY (efímera, 24h)' : 'FEED (permanente)'}
+MARCA: ${((brandBrain.identity as Record<string, string>) ?? {}).business_name ?? ''}
+VOZ: ${((voice.personality_traits as string[]) ?? []).join(', ')}
+ANTI-TONO: ${voice.anti_tone ?? ''}
+PALABRAS/TEMAS PROHIBIDOS: ${forbidden.join(', ') || 'ninguno'}
+TIPO DE PIEZA: ${kind === 'story' ? 'STORY (efímera, 24h)' : 'FEED (permanente)'}
 
 ${kind === 'story' ? storyRules : feedRules}
 
-Si TODO está bien y se puede publicar sin intervención: passes=true.
-Si HAY UN solo problema: passes=false e indica los issues concretos.`,
+EJES DE EVALUACIÓN (0.0 = pésimo, 1.0 = perfecto):
+- voice_fidelity: ¿suena exactamente como esta marca? ¿respeta voz, tono y palabras?
+- hook_strength: ¿las primeras 1-2 líneas enganchan y detienen el scroll?
+- cta_clarity: ¿el CTA es claro, concreto y accionable?
+- originality: ¿es fresco? ¿no canibaliza conceptos recientes de esta marca?
+- platform_nativity: ¿hashtags, longitud, estilo son nativos de la plataforma?
+
+CONFIANZA:
+- "high": todos los ejes claros, sin ambigüedades
+- "medium": hay dudas en 1-2 ejes pero no son bloqueantes
+- "low": contenido ambiguo, sensible, o no puedes evaluar bien la voz de marca
+
+SIMILARIDAD: similarity_flag=true si el concepto es sustancialmente igual a alguno de los recientes.
+
+passes=true solo si: score>=0.65, confidence!="low", passes!=false por criterio absoluto.`,
     messages: [
       {
         role: 'user',
-        content: `Evalúa esta pieza para auto-publicación:
+        content: `Evalúa esta pieza:
 
 Tipo: ${payload.content_type}
 Concepto: ${payload.concept}
@@ -452,8 +480,11 @@ ${payload.copy}
 Hashtags: ${(payload.hashtags ?? []).map((h) => `#${h.replace(/^#/, '')}`).join(' ') || '(ninguno)'}
 CTA: ${payload.cta ?? '(ninguno)'}
 
+CONTENIDO RECIENTE DE ESTA MARCA (últimos 60 días — verifica similaridad):
+${recentConcepts || '(sin historial aún)'}
+
 Responde SOLO en JSON válido:
-{"passes":true|false,"score":0.0-1.0,"issues":["..."],"reasoning":"breve explicación"}`,
+{"passes":false,"confidence":"high","score":0.0,"axes":{"voice_fidelity":0.0,"hook_strength":0.0,"cta_clarity":0.0,"originality":0.0,"platform_nativity":0.0},"similarity_flag":false,"issues":[],"reasoning":""}`,
       },
     ],
   })
