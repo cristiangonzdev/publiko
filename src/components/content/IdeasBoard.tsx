@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { AddIdeaModal } from './AddIdeaModal'
@@ -158,17 +159,21 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
   const [togglingTier, setTogglingTier] = useState(false)
   const [runningJudge, setRunningJudge] = useState(false)
+  const [pollingTimedOut, setPollingTimedOut] = useState(false)
+  const [retryingBriefs, setRetryingBriefs] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollingStartRef = useRef<number | null>(null)
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
+    pollingStartRef.current = null
   }, [])
 
-  // Poll every 3s while task exists but briefs are still being generated
+  // Poll every 3s while task exists but briefs are still being generated (max 3 min)
   useEffect(() => {
     const brief = taskDetail?.recording_brief as Record<string, unknown> | null | undefined
     const briefsReady = brief != null && Object.keys(brief).length > 0
@@ -177,8 +182,16 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
       return
     }
     if (!selectedIdea) return
+    setPollingTimedOut(false)
     const ideaId = selectedIdea.id as string
+    pollingStartRef.current = Date.now()
     pollingRef.current = setInterval(async () => {
+      // Stop after 3 minutes
+      if (pollingStartRef.current && Date.now() - pollingStartRef.current > 3 * 60 * 1000) {
+        stopPolling()
+        setPollingTimedOut(true)
+        return
+      }
       try {
         const res = await fetch(`/api/ideas/${ideaId}/detail`)
         if (res.ok) {
@@ -195,6 +208,23 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     return stopPolling
   }, [taskDetail, selectedIdea, stopPolling])
 
+  const retryBriefs = async () => {
+    if (!taskDetail) return
+    setRetryingBriefs(true)
+    setPollingTimedOut(false)
+    try {
+      const res = await fetch(`/api/tasks/${taskDetail.id}/retry-briefs`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      // Restart polling
+      setTaskDetail({ ...taskDetail, recording_brief: {} as RecordingBrief, editing_brief: {} as EditingBrief })
+      toast.success('Regenerando briefs, espera unos segundos…')
+    } catch (err) {
+      toast.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setRetryingBriefs(false)
+    }
+  }
+
   const toggleApprovalTier = async () => {
     if (!taskDetail) return
     const next = taskDetail.approval_tier === 'auto' ? 'manual' : 'auto'
@@ -208,7 +238,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
       if (!res.ok) throw new Error(await res.text())
       setTaskDetail({ ...taskDetail, approval_tier: next })
     } catch (err) {
-      alert(`Error cambiando tier: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error cambiando tier: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setTogglingTier(false)
     }
@@ -227,8 +257,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         judge_run_at: new Date().toISOString(),
         auto_publish_blocked_reason: verdict.passes ? null : verdict.issues.join('; '),
       })
+      toast.success(verdict.passes ? 'Judge aprobó el copy ✓' : 'Judge encontró problemas')
     } catch (err) {
-      alert(`Error ejecutando judge: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error ejecutando judge: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setRunningJudge(false)
     }
@@ -245,8 +276,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
       if (!res.ok) throw new Error(await res.text())
       const { ideas: newIdeas } = await res.json() as { ideas: Array<Record<string, unknown>> }
       setIdeas((prev) => [...newIdeas, ...prev])
+      toast.success(`${(newIdeas as unknown[]).length} ideas generadas`)
     } catch (err) {
-      alert(`Error generando ideas: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error generando ideas: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setGenerating(false)
     }
@@ -263,8 +295,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? updated : i))
       setActiveStatus('approved')
       void openDetail(updated)
+      toast.success('Idea aprobada — generando briefs…')
     } catch (err) {
-      alert(`Error aprobando idea: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error aprobando idea: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoadingId(null)
     }
@@ -329,7 +362,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         cta: chosen?.cta ?? null,
       })
     } catch (err) {
-      alert(`Error eligiendo copy: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error eligiendo copy: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSavingCopyIndex(null)
     }
@@ -354,8 +387,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         grabador_id: grabadorPick || null,
         editor_id: editorPick || null,
       })
+      toast.success('Equipo asignado')
     } catch (err) {
-      alert(`Error asignando equipo: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error asignando equipo: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSavingTeam(false)
     }
@@ -364,7 +398,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const sendToProduction = async () => {
     if (!taskDetail || !selectedIdea) return
     if (!taskDetail.copy_selected) {
-      alert('Elige un copy antes de enviar a producción.')
+      toast.warning('Elige un copy antes de enviar a producción.')
       return
     }
     setSendingToProduction(true)
@@ -376,8 +410,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
       setSelectedIdea({ ...selectedIdea, status: 'in_production' })
       setTaskDetail({ ...taskDetail, status: 'recording' })
       setActiveStatus('in_production')
+      toast.success('Enviado a producción — ya puedes grabar')
     } catch (err) {
-      alert(`Error enviando a producción: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error enviando a producción: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSendingToProduction(false)
     }
@@ -400,10 +435,11 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         status: 'brutos_ready',
         bruto_asset_ids: [...(taskDetail.bruto_asset_ids ?? []), asset_id],
       })
-      setUploadMessage('✓ Bruto subido y editor avisado por Telegram')
+      setUploadMessage('✓ Bruto subido')
+      toast.success('Bruto subido correctamente')
     } catch (err) {
       setUploadMessage(null)
-      alert(`Error subiendo bruto: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Error subiendo bruto: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setUploadingBruto(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -639,25 +675,43 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                 <div className="py-6 text-center text-sm text-ink-400">Cargando briefs…</div>
               )}
 
-              {/* Briefs generating skeleton */}
+              {/* Briefs generating skeleton / error state */}
               {taskDetail && (() => { const b = taskDetail.recording_brief as Record<string,unknown>|null; return !b || Object.keys(b).length === 0 })() && (
                 <>
-                  <Section title="Brief de grabación">
-                    <div className="space-y-2 animate-pulse">
-                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
-                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
-                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
-                      <div className="h-3.5 rounded bg-ink-100 w-3/5" />
-                    </div>
-                    <p className="mt-3 text-xs text-ink-400">Claude está generando el brief…</p>
-                  </Section>
-                  <Section title="Brief de edición">
-                    <div className="space-y-2 animate-pulse">
-                      <div className="h-3.5 rounded bg-ink-100 w-2/3" />
-                      <div className="h-3.5 rounded bg-ink-100 w-1/2" />
-                      <div className="h-3.5 rounded bg-ink-100 w-3/4" />
-                    </div>
-                  </Section>
+                  {pollingTimedOut ? (
+                    <Section title="Brief de grabación">
+                      <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        <p className="font-semibold">Error al generar los briefs</p>
+                        <p className="mt-1 text-xs">Claude no pudo completar la generación. Puede ser un problema temporal.</p>
+                        <button
+                          onClick={retryBriefs}
+                          disabled={retryingBriefs}
+                          className="mt-3 rounded-md bg-red-800 px-4 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {retryingBriefs ? 'Regenerando…' : '↺ Reintentar generación'}
+                        </button>
+                      </div>
+                    </Section>
+                  ) : (
+                    <>
+                      <Section title="Brief de grabación">
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                          <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                          <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                          <div className="h-3.5 rounded bg-ink-100 w-3/5" />
+                        </div>
+                        <p className="mt-3 text-xs text-ink-400">Claude está generando el brief…</p>
+                      </Section>
+                      <Section title="Brief de edición">
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3.5 rounded bg-ink-100 w-2/3" />
+                          <div className="h-3.5 rounded bg-ink-100 w-1/2" />
+                          <div className="h-3.5 rounded bg-ink-100 w-3/4" />
+                        </div>
+                      </Section>
+                    </>
+                  )}
                 </>
               )}
 
@@ -834,8 +888,8 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
                 </Section>
               )}
 
-              {/* Team assignment — visible for admin at any production stage */}
-              {taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (grabadores.length > 0 || editores.length > 0) && (
+              {/* Team assignment — visible for admin at any production stage (including solo) */}
+              {taskDetail && ['approved', 'in_production', 'published'].includes(ideaStatus) && (
                 <Section title="Equipo asignado (opcional)">
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">

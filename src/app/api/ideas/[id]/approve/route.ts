@@ -102,8 +102,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
       const businessName = clientData?.business_name ?? ''
       await notifyAdmin(`✅ <b>Idea aprobada</b>\n\n${businessName}\n${idea.concept}\n\nTarea creada con copies para: ${platforms.join(', ')}.`)
-    } catch {
-      // Brief generation failed — task stays with null briefs, user can retry
+    } catch (err) {
+      console.error(`[approve] brief generation failed for idea ${id}:`, err)
+      await service
+        .from('content_tasks')
+        .update({ admin_notes: '⚠️ Error generando briefs automáticamente. Usa "Reintentar briefs" en el drawer.' } as any)
+        .eq('id', task.id)
+      const clientData = idea.clients as unknown as { business_name: string }
+      await notifyAdmin(
+        `⚠️ <b>Error generando briefs</b>\n\nCliente: ${clientData?.business_name ?? ''}\nIdea: ${idea.concept}\n\nAbre el drawer y pulsa "Reintentar briefs".\n\nError: ${err instanceof Error ? err.message : String(err)}`,
+      )
     }
   })
 
