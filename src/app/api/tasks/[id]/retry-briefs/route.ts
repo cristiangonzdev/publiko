@@ -5,6 +5,9 @@ import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
 
+// Espera 3 llamadas a Claude dentro de la request (~30-60s).
+export const maxDuration = 120
+
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()

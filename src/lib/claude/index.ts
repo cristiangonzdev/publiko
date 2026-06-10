@@ -35,7 +35,10 @@ export async function callClaudeJSON<T>(params: {
 
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await client.messages.create({ model, max_tokens, system: systemParam, messages })
+    // Si el primer intento salió truncado, repetir con el mismo límite se
+    // trunca igual: el reintento dobla max_tokens.
+    const tokens = attempt === 0 ? max_tokens : max_tokens * 2
+    const response = await client.messages.create({ model, max_tokens: tokens, system: systemParam, messages })
     if (response.stop_reason === 'max_tokens') {
       lastError = new Error('Respuesta de Claude truncada (max_tokens)')
       continue
