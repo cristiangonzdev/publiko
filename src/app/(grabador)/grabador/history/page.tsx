@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
+import { contentStatusStyle } from '@/lib/status'
 import { redirect } from 'next/navigation'
 
 export default async function GrabadorHistoryPage() {
@@ -23,24 +24,6 @@ export default async function GrabadorHistoryPage() {
     .in('id', clientIds)
 
   const clientMap = Object.fromEntries((clients ?? []).map((c) => [c.id, c.business_name]))
-
-  const STATUS_LABEL: Record<string, string> = {
-    brutos_ready: 'Brutos listos',
-    editing: 'En edición',
-    delivered: 'Entregado',
-    approved: 'Aprobado',
-    scheduled: 'Programado',
-    published: 'Publicado',
-  }
-
-  const STATUS_COLOR: Record<string, string> = {
-    brutos_ready: 'bg-purple-50 text-purple-700',
-    editing: 'bg-orange-50 text-orange-700',
-    delivered: 'bg-pink-50 text-pink-700',
-    approved: 'bg-green-50 text-green-700',
-    scheduled: 'bg-teal-50 text-teal-700',
-    published: 'bg-blue-50 text-blue-700',
-  }
 
   return (
     <div className="p-4 md:p-8">
@@ -76,8 +59,8 @@ export default async function GrabadorHistoryPage() {
                 </td>
                 <td className="px-3 py-3 text-[11px] text-ink-500">{t.content_type}</td>
                 <td className="px-3 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLOR[t.status] ?? 'bg-ink-100 text-ink-500'}`}>
-                    {STATUS_LABEL[t.status] ?? t.status}
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${contentStatusStyle(t.status).badge}`}>
+                    {contentStatusStyle(t.status).label}
                   </span>
                 </td>
                 <td className="px-3 py-3 text-xs text-ink-500">

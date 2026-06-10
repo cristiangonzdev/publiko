@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { notifyUser, notifyAdmin, TG } from '@/lib/telegram'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['grabador'] })
+  if (!access.ok) return access.response
 
   const service = await createServiceClient()
 

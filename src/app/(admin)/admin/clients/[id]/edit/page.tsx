@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/guards'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -26,6 +27,8 @@ export default async function EditClientPage({ params, searchParams }: Props) {
 
   async function updateClient(formData: FormData) {
     'use server'
+    const ctx = await getAuthContext()
+    if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
     const svc = await createServiceClient()
 
     const getValue = (key: string) => (formData.get(key) as string | null) || null

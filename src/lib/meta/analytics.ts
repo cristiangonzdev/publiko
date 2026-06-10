@@ -23,11 +23,13 @@ export async function getPostInsights(
   externalPostId: string,
   token: string,
   isVideo = false,
+  followers = 0,
 ): Promise<PostInsights | null> {
   try {
-    const metrics = isVideo
-      ? 'reach,impressions,plays,comments,shares,saved'
-      : 'reach,impressions,likes_count,comments_count,shares_count,saved'
+    // Nombres de métrica VÁLIDOS de IG media insights. Tanto feed como reels
+    // soportan este set; pedir nombres inventados (likes_count, …) hace que la
+    // API devuelva error y el harvest se quede a null.
+    const metrics = 'reach,likes,comments,shares,saved'
 
     const data = await graphGet<{
       data: Array<{ name: string; values: Array<{ value: number }> }>
@@ -38,24 +40,29 @@ export async function getPostInsights(
       values[item.name] = item.values?.[0]?.value ?? 0
     }
 
-    const totalInteractions =
-      (values.likes_count ?? 0) +
-      (values.comments_count ?? values.comments ?? 0) +
-      (values.saved ?? 0)
+    const likes = values.likes ?? 0
+    const comments = values.comments ?? 0
+    const shares = values.shares ?? 0
+    const saves = values.saved ?? 0
+    const totalInteractions = likes + comments + shares + saves
 
     const reach = values.reach ?? 0
-    const engagementRate = reach > 0 ? totalInteractions / reach : 0
+    // engagement_rate = interacciones / alcance; si no hay alcance, cae a
+    // seguidores como denominador para no perder la señal.
+    const denominator = reach > 0 ? reach : followers
+    const engagementRate = denominator > 0 ? totalInteractions / denominator : 0
 
     return {
       reach,
       impressions: values.impressions ?? 0,
-      likes: values.likes_count ?? 0,
-      comments: values.comments_count ?? values.comments ?? 0,
-      shares: values.shares_count ?? values.shares ?? 0,
-      saves: values.saved ?? 0,
+      likes,
+      comments,
+      shares,
+      saves,
       engagement_rate: engagementRate,
     }
-  } catch {
+  } catch (err) {
+    console.error('getPostInsights failed', externalPostId, err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -70,7 +77,8 @@ export async function getIGFollowerCount(
       token,
     )
     return data.followers_count ?? null
-  } catch {
+  } catch (err) {
+    console.error('getIGFollowerCount failed', igAccountId, err instanceof Error ? err.message : err)
     return null
   }
 }

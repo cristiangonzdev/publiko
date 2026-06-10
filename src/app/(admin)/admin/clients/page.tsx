@@ -1,23 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-
-const statusLabel: Record<string, string> = {
-  lead: 'Lead',
-  proposal_sent: 'Propuesta',
-  negotiation: 'Negociación',
-  active: 'Activo',
-  paused: 'Pausado',
-  churned: 'Baja',
-}
-
-const statusColor: Record<string, string> = {
-  lead: 'bg-ink-100 text-ink-600',
-  proposal_sent: 'bg-blue-50 text-blue-700',
-  negotiation: 'bg-yellow-50 text-yellow-700',
-  active: 'bg-green-50 text-green-700',
-  paused: 'bg-orange-50 text-orange-700',
-  churned: 'bg-red-50 text-red-700',
-}
+import { clientStatusStyle } from '@/lib/status'
 
 export default async function ClientsPage() {
   const supabase = await createClient()
@@ -62,8 +45,8 @@ export default async function ClientsPage() {
               <tr key={c.id} className="hover:bg-ink-50">
                 <td className="px-4 py-3 font-medium text-ink-900">{c.business_name}</td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[c.status] ?? 'bg-ink-100 text-ink-600'}`}>
-                    {statusLabel[c.status] ?? c.status}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${clientStatusStyle(c.status).badge}`}>
+                    {clientStatusStyle(c.status).label}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-ink-700">{c.monthly_fee ? `${c.monthly_fee} €` : '—'}</td>

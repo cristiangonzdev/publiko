@@ -104,3 +104,30 @@ El campo `assets.public_url` puede tener una URL de Supabase pero nunca debe usa
 - Las signed URLs expiran. Si un usuario intenta acceder después del TTL, recibirá error 400. El frontend debe regenerar la URL al recargar.
 - El bucket debe estar configurado como privado en Supabase (no público por defecto).
 - El `SERVICE_ROLE_KEY` o el token del usuario autenticado es necesario para generar signed URLs.
+
+---
+
+## ADR-004: Haiku para tareas de scoring/clasificación
+
+**Estado:** Aceptado
+**Fecha:** 2026-06-09
+
+### Contexto
+El pipeline usaba `claude-sonnet-4-6` para todas las llamadas a Claude, incluidas tareas que no son creativas sino de evaluación contra una rúbrica fija: el juez de contenido (`judgeContent`), la generación de geo-queries (`generateGeoQueries`) y los borradores de respuesta a reseñas (`generateReviewResponse`). Estas llamadas se ejecutan con alta frecuencia (el juez en cada idea, las geo-queries y reseñas de forma recurrente vía cron), lo que las convierte en un coste recurrente significativo.
+
+### Decisión
+**Las tareas de scoring/clasificación pasan a `claude-haiku-4-5-20251001`:**
+- `judgeContent` — evaluación pasa/no-pasa contra rúbrica.
+- `generateGeoQueries` — enumeración de queries para snapshots de visibilidad IA.
+- `generateReviewResponse` — respuesta a reseña siguiendo plantilla/tono fijos.
+
+**La generación creativa se mantiene en `claude-sonnet-4-6`:** ideas (`generateWeeklyIdeas`, `generateDailyBatch`), copies (`generateCopyOptions`, `generateCopiesPerPlatform`), briefs (`generateBriefs`), refinamiento de Brand Brain (`generateBrainRefinementProposal`) e informes.
+
+### Alternativas consideradas
+- **Todo en Sonnet (statu quo):** Calidad uniforme pero coste innecesariamente alto en tareas donde Haiku rinde igual.
+- **Todo en Haiku:** Descartado — la generación creativa (voz de marca, ideas) sí se degrada con un modelo más pequeño.
+
+### Consecuencias
+- Haiku es ~3× más barato que Sonnet; el ahorro es notable dado el volumen de llamadas de scoring.
+- En tareas de rúbrica/clasificación Haiku rinde de forma equivalente, sin pérdida de calidad observable.
+- Hay que vigilar dos IDs de modelo en el código. Cualquier cambio de modelo creativo sigue requiriendo actualizar la nota de `CLAUDE.md` (`claude-sonnet-4-6`).

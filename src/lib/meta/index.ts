@@ -102,10 +102,25 @@ export async function publishToInstagram(payload: MetaPublishPayload): Promise<M
     { creation_id: container.id },
   )
 
+  // El id devuelto es el media id, no el shortcode: para la URL real pedimos el permalink.
+  // Las stories no tienen URL pública estable (caducan en 24h).
+  let externalUrl: string | null = null
+  if (kind !== 'story') {
+    try {
+      const meta = await graphRequest<{ permalink?: string }>(
+        `${publish.id}?fields=permalink`,
+        'GET',
+        payload.systemUserToken,
+      )
+      externalUrl = meta.permalink ?? null
+    } catch {
+      externalUrl = null
+    }
+  }
+
   return {
     external_post_id: publish.id,
-    // Las stories no tienen URL pública estable (caducan en 24h); devolvemos null.
-    external_url: kind === 'story' ? null : `https://www.instagram.com/p/${publish.id}/`,
+    external_url: externalUrl,
   }
 }
 

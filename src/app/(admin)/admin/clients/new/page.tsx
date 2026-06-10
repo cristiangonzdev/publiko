@@ -1,8 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/guards'
 
 async function createClient(formData: FormData) {
   'use server'
+  const ctx = await getAuthContext()
+  if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
   const supabase = await createServiceClient()
 
   const businessName = formData.get('business_name') as string

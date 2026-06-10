@@ -9,7 +9,7 @@ interface Broll {
   file_name: string
   file_type: string
   file_size: number | null
-  public_url: string | null
+  signed_url: string | null
   storage_path: string
   description: string | null
   tags: string[] | null
@@ -147,12 +147,12 @@ export function BrollsManager({ clientId }: Props) {
             {brolls.map((b) => (
               <div key={b.id} className="group relative overflow-hidden rounded-lg border border-ink-200 bg-ink-50">
                 <div className="aspect-square bg-ink-100">
-                  {isImage(b.file_type) && b.public_url && (
+                  {isImage(b.file_type) && b.signed_url && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={b.public_url} alt={b.file_name} className="h-full w-full object-cover" />
+                    <img src={b.signed_url} alt={b.file_name} className="h-full w-full object-cover" />
                   )}
-                  {isVideo(b.file_type) && b.public_url && (
-                    <video src={b.public_url} className="h-full w-full object-cover" muted preload="metadata" />
+                  {isVideo(b.file_type) && b.signed_url && (
+                    <video src={b.signed_url} className="h-full w-full object-cover" muted preload="metadata" />
                   )}
                   {!isImage(b.file_type) && !isVideo(b.file_type) && (
                     <div className="flex h-full items-center justify-center text-xs text-ink-400">📄</div>

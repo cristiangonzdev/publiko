@@ -53,27 +53,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     winner_source: string | null
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: post } = await (service.from('posts') as any)
+  const { data: post, error: postFetchErr } = await service
+    .from('posts')
     .select('id, client_id, task_id, platform, copy, hashtags, published_at, reach, impressions, likes, comments, shares, saves, engagement_rate, is_winner, winner_source')
     .eq('id', id)
-    .single() as { data: PostForWinner | null }
+    .single() as { data: PostForWinner | null; error: { message: string } | null }
 
+  if (postFetchErr && !post) return NextResponse.json({ error: postFetchErr.message }, { status: 500 })
   if (!post) return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
 
+  // content_type vive en content_tasks; angle/concept en content_ideas,
+  // enlazado por content_tasks.idea_id (no existen como columnas en tasks).
   let contentType: string | null = null
   let angle: string | null = null
   let conceptSummary: string | null = null
   if (post.task_id) {
-    interface TaskRow { content_type: string | null; angle: string | null; concept: string | null }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: task } = await (service.from('content_tasks') as any)
-      .select('content_type, angle, concept')
+    interface TaskRow { content_type: string | null; idea_id: string | null }
+    const { data: task, error: taskErr } = await service
+      .from('content_tasks')
+      .select('content_type, idea_id')
       .eq('id', post.task_id)
-      .single() as { data: TaskRow | null }
+      .single() as { data: TaskRow | null; error: { message: string } | null }
+    if (taskErr && !task) return NextResponse.json({ error: taskErr.message }, { status: 500 })
     contentType = task?.content_type ?? null
-    angle = task?.angle ?? null
-    conceptSummary = task?.concept ?? null
+
+    if (task?.idea_id) {
+      interface IdeaRow { angle: string | null; concept: string | null }
+      const { data: idea, error: ideaErr } = await service
+        .from('content_ideas')
+        .select('angle, concept')
+        .eq('id', task.idea_id)
+        .single() as { data: IdeaRow | null; error: { message: string } | null }
+      if (ideaErr && !idea) return NextResponse.json({ error: ideaErr.message }, { status: 500 })
+      angle = idea?.angle ?? null
+      conceptSummary = idea?.concept ?? null
+    }
   }
 
   const publishDate = post.published_at ? new Date(post.published_at) : null

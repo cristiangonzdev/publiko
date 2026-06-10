@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/getUser'
+import { createSignedDownloadUrls } from '@/lib/upload/signed-download'
 import { AssetUploader } from '@/components/cliente/AssetUploader'
 
 export default async function ClienteAssetsPage() {
@@ -15,11 +16,16 @@ export default async function ClienteAssetsPage() {
   const { data: assets } = client
     ? await supabase
         .from('assets')
-        .select('id, file_name, file_type, public_url, asset_category, created_at')
+        .select('id, file_name, file_type, storage_path, asset_category, created_at')
         .eq('client_id', client.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
     : { data: [] }
+
+  // El bucket `assets` es privado: firmamos las URLs bajo demanda.
+  const signedUrls = await createSignedDownloadUrls(
+    (assets ?? []).map((a) => a.storage_path).filter((p): p is string => Boolean(p)),
+  )
 
   return (
     <div className="p-4 md:p-8">
@@ -35,12 +41,14 @@ export default async function ClienteAssetsPage() {
         {!assets?.length && (
           <p className="col-span-4 py-8 text-center text-sm text-ink-400">Sin assets subidos aún.</p>
         )}
-        {assets?.map((asset) => (
+        {assets?.map((asset) => {
+          const signedUrl = asset.storage_path ? signedUrls.get(asset.storage_path) : undefined
+          return (
           <div key={asset.id} className="rounded-lg border border-ink-200 bg-white overflow-hidden">
-            {asset.public_url && asset.file_type.startsWith('image/') ? (
+            {signedUrl && asset.file_type.startsWith('image/') ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={asset.public_url}
+                src={signedUrl}
                 alt={asset.file_name}
                 className="h-32 w-full object-cover"
               />
@@ -56,7 +64,8 @@ export default async function ClienteAssetsPage() {
               </p>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

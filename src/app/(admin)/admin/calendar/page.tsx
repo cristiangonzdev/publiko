@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { formatMadrid, madridDateKey } from '@/lib/datetime'
 
 export default async function AdminCalendarPage() {
   const supabase = await createClient()
@@ -32,7 +33,7 @@ export default async function AdminCalendarPage() {
   const byDay: Record<string, typeof enriched> = {}
   for (const t of enriched) {
     if (!t.publish_at) continue
-    const day = t.publish_at.slice(0, 10)
+    const day = madridDateKey(t.publish_at)
     if (!byDay[day]) byDay[day] = []
     byDay[day].push(t)
   }
@@ -57,8 +58,7 @@ export default async function AdminCalendarPage() {
           <p className="text-sm text-ink-400 mt-8">No hay publicaciones programadas en los próximos 2 meses.</p>
         )}
         {Object.entries(byDay).map(([day, items]) => {
-          const date = new Date(day + 'T12:00:00')
-          const label = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+          const label = formatMadrid(`${day}T12:00:00Z`, { weekday: 'long', day: 'numeric', month: 'long' })
           return (
             <div key={day} className="rounded-lg border border-ink-200 bg-white overflow-hidden">
               <div className="border-b border-ink-100 bg-ink-50 px-4 py-2">
@@ -80,7 +80,7 @@ export default async function AdminCalendarPage() {
                         <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600">{p}</span>
                       ))}
                       <span className="text-[10px] text-ink-400">
-                        {t.publish_at ? new Date(t.publish_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        {t.publish_at ? formatMadrid(t.publish_at, { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
                     </div>
                   </div>

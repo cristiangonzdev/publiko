@@ -26,7 +26,7 @@ interface BaselineRow {
   p75_engagement_rate: number | null
 }
 
-interface TaskRow {
+interface TaskFeatures {
   content_type: string | null
   angle: string | null
   concept: string | null
@@ -68,7 +68,7 @@ export async function detectAndMarkWinners(
   await supabase.rpc('compute_client_baseline', { p_client_id: clientId })
 
   const lookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: posts } = await supabase
+  const { data: posts, error: postsErr } = await supabase
     .from('posts')
     .select('id, client_id, task_id, platform, external_post_id, copy, hashtags, published_at, reach, engagement_rate, impressions, likes, comments, shares, saves')
     .eq('client_id', clientId)
@@ -77,27 +77,66 @@ export async function detectAndMarkWinners(
     .gte('published_at', lookback)
     .not('engagement_rate', 'is', null)
 
+  if (postsErr) {
+    throw new Error(`detectAndMarkWinners: error cargando posts: ${postsErr.message}`)
+  }
+
   if (!posts?.length) {
     return { client_id: clientId, posts_evaluated: 0, winners_marked: 0, patterns_created: 0 }
   }
 
   const typedPosts = posts as unknown as PostRow[]
   const taskIds = typedPosts.map((p) => p.task_id).filter((id): id is string => !!id)
-  const tasksById = new Map<string, TaskRow>()
+  const tasksById = new Map<string, TaskFeatures>()
   if (taskIds.length > 0) {
-    const { data: tasks } = await supabase
+    // content_type vive en content_tasks; angle/concept viven en content_ideas,
+    // enlazado por content_tasks.idea_id (esas columnas NO existen en tasks).
+    const { data: tasks, error: tasksErr } = await supabase
       .from('content_tasks')
-      .select('id, content_type, angle, concept')
+      .select('id, content_type, idea_id')
       .in('id', taskIds)
-    for (const t of (tasks ?? []) as Array<{ id: string } & TaskRow>) {
-      tasksById.set(t.id, { content_type: t.content_type, angle: t.angle, concept: t.concept })
+
+    if (tasksErr) {
+      throw new Error(`detectAndMarkWinners: error cargando content_tasks: ${tasksErr.message}`)
+    }
+
+    const typedTasks = (tasks ?? []) as Array<{ id: string; content_type: string | null; idea_id: string | null }>
+    const ideaIds = typedTasks.map((t) => t.idea_id).filter((id): id is string => !!id)
+
+    const ideasById = new Map<string, { angle: string | null; concept: string | null }>()
+    if (ideaIds.length > 0) {
+      const { data: ideas, error: ideasErr } = await supabase
+        .from('content_ideas')
+        .select('id, angle, concept')
+        .in('id', ideaIds)
+
+      if (ideasErr) {
+        throw new Error(`detectAndMarkWinners: error cargando content_ideas: ${ideasErr.message}`)
+      }
+
+      for (const i of (ideas ?? []) as Array<{ id: string; angle: string | null; concept: string | null }>) {
+        ideasById.set(i.id, { angle: i.angle, concept: i.concept })
+      }
+    }
+
+    for (const t of typedTasks) {
+      const idea = t.idea_id ? ideasById.get(t.idea_id) : null
+      tasksById.set(t.id, {
+        content_type: t.content_type,
+        angle: idea?.angle ?? null,
+        concept: idea?.concept ?? null,
+      })
     }
   }
 
-  const { data: baselines } = await supabase
+  const { data: baselines, error: baselinesErr } = await supabase
     .from('client_performance_baselines')
     .select('platform, content_type, median_engagement_rate, p75_engagement_rate')
     .eq('client_id', clientId)
+
+  if (baselinesErr) {
+    throw new Error(`detectAndMarkWinners: error cargando baselines: ${baselinesErr.message}`)
+  }
 
   const baselineMap = new Map<string, BaselineRow>()
   for (const b of (baselines ?? []) as Array<{ platform: string; content_type: string } & BaselineRow>) {

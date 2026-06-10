@@ -3,13 +3,17 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { generateDailyBatch, type DailyGenerationConfig } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
+import { sanitizeIdea } from '@/lib/content'
+import { mapLimit } from '@/lib/async'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-const VALID_ANGLES = ['emocional','informativo','humor','social_proof','educativo','aspiracional','detras_escenas','anuncio','opinion','historia']
-const VALID_TYPES = ['reel','post','story','carrusel','gmb_post']
+// Concurrencia acotada: a 100 clientes, disparar todo en paralelo satura los
+// rate limits de Claude y revienta el maxDuration. 5 clientes a la vez.
+const CLIENT_CONCURRENCY = 5
+const AUTO_PROCESS_CONCURRENCY = 3
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
@@ -47,7 +51,9 @@ export async function GET(request: Request) {
     error?: string
   }> = []
 
-  await Promise.all(eligible.map(async (c) => {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? ''
+
+  await mapLimit(eligible, CLIENT_CONCURRENCY, async (c) => {
     try {
       const cfg = c.daily_generation_config as DailyGenerationConfig
 
@@ -79,42 +85,48 @@ export async function GET(request: Request) {
         dateLabel,
       )
 
-      const sanitized = batch.map((idea) => ({
-        client_id: c.id,
-        concept: idea.concept,
-        full_description: idea.full_description,
-        content_type: VALID_TYPES.includes(idea.content_type) ? idea.content_type : 'story',
-        angle: VALID_ANGLES.includes(idea.angle) ? idea.angle : 'detras_escenas',
-        content_origin: 'system' as const,
-        content_pillar: idea.content_pillar ?? null,
-        approval_tier: idea.approval_tier === 'auto' ? 'auto' : 'manual',
-        scheduled_for_date: todayISO,
-        status: 'suggested' as const,
-        can_recycle_after: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-        // stash suggested time in human_input for now (no dedicated column)
-        human_input: idea.suggested_publish_time ?? null,
-      }))
+      const sanitized = batch.map((idea) => {
+        const s = sanitizeIdea(idea, { typeFallback: 'story', angleFallback: 'detras_escenas' })
+        return {
+          client_id: c.id,
+          concept: s.concept,
+          full_description: s.full_description,
+          content_type: s.content_type,
+          angle: s.angle,
+          content_origin: 'system' as const,
+          content_pillar: s.content_pillar,
+          approval_tier: s.approval_tier,
+          scheduled_for_date: todayISO,
+          status: 'suggested' as const,
+          can_recycle_after: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+          suggested_publish_time: s.suggested_publish_time,
+        }
+      })
 
       if (sanitized.length === 0) {
         results.push({ client_id: c.id, business_name: c.business_name, inserted: 0, auto: 0, manual: 0, auto_queued: 0 })
         return
       }
 
-      const { data: inserted } = await service
+      const { data: inserted, error: insertError } = await service
         .from('content_ideas')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .insert(sanitized as any)
+        .insert(sanitized)
         .select('id, approval_tier, content_type')
+
+      if (insertError) {
+        results.push({ client_id: c.id, business_name: c.business_name, inserted: 0, auto: 0, manual: 0, auto_queued: 0, error: insertError.message })
+        return
+      }
 
       const ideasInserted = inserted ?? []
       const autoIdeas = ideasInserted.filter((i) => i.approval_tier === 'auto')
       const manualCount = ideasInserted.length - autoIdeas.length
 
-      // Fire auto-process for auto-tier ideas, in parallel.
-      // Each one creates a task + per-platform copies + runs the judge.
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? ''
-      const autoQueued = await Promise.allSettled(
-        autoIdeas.map((idea) =>
+      // Auto-process de las ideas auto-tier, con concurrencia acotada.
+      // Cada una crea tarea + copies por plataforma + corre el juez.
+      let autoOk = 0
+      if (baseUrl) {
+        const autoResults = await mapLimit(autoIdeas, AUTO_PROCESS_CONCURRENCY, (idea) =>
           fetch(`${baseUrl}/api/ideas/${idea.id}/auto-process`, {
             method: 'POST',
             headers: {
@@ -122,10 +134,14 @@ export async function GET(request: Request) {
               authorization: `Bearer ${process.env.CRON_SECRET}`,
             },
             body: JSON.stringify({}),
-          }).then((r) => r.ok),
-        ),
-      )
-      const autoOk = autoQueued.filter((r) => r.status === 'fulfilled' && r.value === true).length
+          })
+            .then((r) => r.ok)
+            .catch(() => false),
+        )
+        autoOk = autoResults.filter(Boolean).length
+      } else {
+        console.error('[daily-generation] NEXT_PUBLIC_APP_URL no configurado: auto-process omitido')
+      }
 
       results.push({
         client_id: c.id,
@@ -146,7 +162,7 @@ export async function GET(request: Request) {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-  }))
+  })
 
   const totalInserted = results.reduce((s, r) => s + r.inserted, 0)
   const totalAuto = results.reduce((s, r) => s + r.auto, 0)

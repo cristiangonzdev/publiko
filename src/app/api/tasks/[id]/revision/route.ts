@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
 import { notifyUser } from '@/lib/telegram'
 import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await params
 
   const { note } = await request.json() as { note: string }
   const service = await createServiceClient()
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await service
+  const { data: updated } = await service
     .from('content_tasks')
     .update({
       status: 'revision',
@@ -30,6 +30,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
+    .eq('status', 'delivered')
+    .select('id')
+
+  if (!updated || updated.length === 0) {
+    return NextResponse.json({ error: 'Estado inválido para revisión' }, { status: 409 })
+  }
 
   if (task.editor_id) {
     const { data: editor } = await service

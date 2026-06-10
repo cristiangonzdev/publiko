@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
   const form = await request.formData()
   const file = form.get('file') as File | null
@@ -18,16 +18,14 @@ export async function POST(request: NextRequest) {
   const service = await createServiceClient()
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  const ext = file.name.split('.').pop() ?? 'bin'
-  const storagePath = `assets/${clientId}/${Date.now()}_${file.name.replace(/\s/g, '_')}.${ext}`
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `assets/${clientId}/${Date.now()}_${safeName}`
 
   const { error: uploadError } = await service.storage
     .from('assets')
     .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
-
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(storagePath)
 
   const { data: asset } = await service
     .from('assets')
@@ -38,12 +36,12 @@ export async function POST(request: NextRequest) {
       file_size: file.size,
       storage_type: 'supabase',
       storage_path: storagePath,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: category,
-      uploaded_by: user.id,
+      uploaded_by: auth.ctx.userId,
     })
     .select('id')
     .single()
 
-  return NextResponse.json({ ok: true, asset_id: asset?.id, public_url: publicUrl })
+  return NextResponse.json({ ok: true, asset_id: asset?.id })
 }

@@ -8,7 +8,6 @@ interface PostRow {
   id: string
   copy: string
   platform: string
-  content_type: string | null
   engagement_rate: string | null
   published_at: string | null
   task_id: string | null
@@ -18,6 +17,12 @@ interface TaskRow {
   id: string
   title: string
   content_type: string
+  idea_id: string | null
+}
+
+interface IdeaRow {
+  id: string
+  concept: string | null
   angle: string | null
 }
 
@@ -47,10 +52,11 @@ export async function GET(request: Request) {
           supabase.from('brand_brains').select('*').eq('client_id', c.id).single(),
           supabase
             .from('posts')
-            .select('id, copy, platform, engagement_rate, published_at')
+            .select('id, copy, platform, engagement_rate, published_at, task_id')
             .eq('client_id', c.id)
             .eq('status', 'published')
             .gte('published_at', thirtyDaysAgo)
+            .order('published_at', { ascending: false })
             .limit(20),
         ])
 
@@ -58,16 +64,24 @@ export async function GET(request: Request) {
           return { client_id: c.id, skipped: 'insufficient data' }
         }
 
-        // content_type and task_id exist in DB but not in auto-generated types — cast
         const posts = rawPosts as unknown as PostRow[]
 
+        // content_type lives on content_tasks; angle/concept live on content_ideas (via idea_id).
         const taskIds = posts.map((p) => p.task_id).filter(Boolean) as string[]
         const { data: rawTasks } = taskIds.length > 0
-          ? await supabase.from('content_tasks').select('id, title').in('id', taskIds)
+          ? await supabase.from('content_tasks').select('id, title, content_type, idea_id').in('id', taskIds)
           : { data: [] }
 
         const tasks = (rawTasks ?? []) as unknown as TaskRow[]
         const taskMap = new Map(tasks.map((t) => [t.id, t]))
+
+        const ideaIds = tasks.map((t) => t.idea_id).filter(Boolean) as string[]
+        const { data: rawIdeas } = ideaIds.length > 0
+          ? await supabase.from('content_ideas').select('id, concept, angle').in('id', ideaIds)
+          : { data: [] }
+
+        const ideas = (rawIdeas ?? []) as unknown as IdeaRow[]
+        const ideaMap = new Map(ideas.map((i) => [i.id, i]))
 
         const sorted = [...posts].sort(
           (a, b) => Number(b.engagement_rate ?? 0) - Number(a.engagement_rate ?? 0),
@@ -76,10 +90,11 @@ export async function GET(request: Request) {
 
         const enriched = sorted.map((p) => {
           const task = taskMap.get(p.task_id ?? '')
+          const idea = task?.idea_id ? ideaMap.get(task.idea_id) : undefined
           return {
-            concept: task?.title ?? p.copy.slice(0, 80),
-            content_type: p.content_type ?? 'post',
-            angle: task?.angle ?? 'informativo',
+            concept: idea?.concept ?? task?.title ?? p.copy.slice(0, 80),
+            content_type: task?.content_type ?? 'post',
+            angle: idea?.angle ?? 'informativo',
             engagement_rate: Number(p.engagement_rate ?? 0),
           }
         })

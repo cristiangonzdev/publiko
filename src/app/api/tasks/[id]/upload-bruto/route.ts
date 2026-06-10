@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { notifyUser, notifyAdmin, TG } from '@/lib/telegram'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await requireTaskAccess(id, { roles: ['grabador'] })
+  if (!access.ok) return access.response
 
   const form = await request.formData()
   const file = form.get('file') as File | null
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { data: task } = await service
     .from('content_tasks')
-    .select('id, client_id, title, editor_id, bruto_asset_ids, clients!inner(business_name)')
+    .select('id, client_id, title, editor_id, clients!inner(business_name)')
     .eq('id', id)
     .single()
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  const ext = file.name.split('.').pop() ?? 'mp4'
+  const ext = (file.name.split('.').pop() ?? 'mp4').replace(/[^a-zA-Z0-9]/g, '')
   const timestamp = Date.now()
   const storagePath = `brutos/${task.client_id}/${id}/${timestamp}.${ext}`
 
@@ -33,8 +33,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
-
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(storagePath)
 
   const { data: asset } = await service
     .from('assets')
@@ -45,24 +43,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       file_size: file.size,
       storage_type: 'supabase',
       storage_path: storagePath,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: 'bruto',
-      uploaded_by: user.id,
+      uploaded_by: access.ctx.userId,
     })
     .select('id')
     .single()
 
-  const existingIds = (task.bruto_asset_ids as string[]) ?? []
-  const newIds = [...existingIds, asset?.id ?? ''].filter(Boolean)
-
+  if (asset?.id) {
+    await service.rpc('append_bruto_asset', { p_task_id: id, p_asset_id: asset.id })
+  }
   await service
     .from('content_tasks')
-    .update({
-      bruto_asset_ids: newIds,
-      status: 'brutos_ready',
-      brutos_uploaded_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update({ status: 'brutos_ready', updated_at: new Date().toISOString() })
     .eq('id', id)
 
   const businessName = (task.clients as unknown as { business_name: string })?.business_name ?? ''
@@ -78,5 +71,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   await notifyAdmin(TG.brutosListos(businessName, task.title))
 
-  return NextResponse.json({ ok: true, asset_id: asset?.id, public_url: publicUrl })
+  return NextResponse.json({ ok: true, asset_id: asset?.id })
 }

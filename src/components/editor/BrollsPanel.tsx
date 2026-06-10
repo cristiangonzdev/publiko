@@ -8,7 +8,7 @@ interface Broll {
   file_name: string
   file_type: string
   file_size: number | null
-  public_url: string | null
+  signed_url: string | null
   storage_path: string
   description: string | null
   tags: string[] | null
@@ -101,21 +101,21 @@ export function BrollsPanel({ clientId, clientName, onClose }: Props) {
                 return (
                   <div key={b.id} className={cn('overflow-hidden rounded-lg border border-ink-200 bg-white')}>
                     <div className="aspect-square bg-ink-100">
-                      {isImage && b.public_url && (
+                      {isImage && b.signed_url && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={b.public_url} alt={b.file_name} className="h-full w-full object-cover" />
+                        <img src={b.signed_url} alt={b.file_name} className="h-full w-full object-cover" />
                       )}
-                      {isVideo && b.public_url && (
-                        <video src={b.public_url} className="h-full w-full object-cover" muted controls preload="metadata" />
+                      {isVideo && b.signed_url && (
+                        <video src={b.signed_url} className="h-full w-full object-cover" muted controls preload="metadata" />
                       )}
                     </div>
                     <div className="p-2">
                       <p className="truncate text-[11px] font-medium text-ink-700">{b.file_name}</p>
                       <div className="mt-0.5 flex items-center justify-between">
                         <span className="text-[10px] text-ink-400">{formatBytes(b.file_size)}</span>
-                        {b.public_url && (
+                        {b.signed_url && (
                           <a
-                            href={b.public_url}
+                            href={b.signed_url}
                             download={b.file_name}
                             className="text-[10px] font-medium text-brand hover:underline"
                           >

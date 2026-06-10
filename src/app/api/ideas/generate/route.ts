@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateWeeklyIdeas } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 import { notifyClientNewWeeklyContent } from '@/lib/email/notifications'
+import { requireAdmin } from '@/lib/auth/guards'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await createClient()
 
   const { client_id } = await request.json() as { client_id: string }
   if (!client_id) return NextResponse.json({ error: 'client_id required' }, { status: 400 })
@@ -93,12 +94,19 @@ export async function POST(request: NextRequest) {
 
   if (client?.contact_email && (inserted?.length ?? 0) > 0) {
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://publiko.app'}/cliente/calendario`
-    notifyClientNewWeeklyContent({
+    const emailArgs = {
       to: client.contact_email,
       businessName: client.business_name ?? 'tu negocio',
       ideaCount: inserted?.length ?? 0,
       portalUrl,
-    }).catch((err) => console.error('[email] notify client failed', err))
+    }
+    // `after()` garantiza que el email se envíe tras la respuesta sin que la
+    // lambda de Vercel se congele a mitad del fire-and-forget.
+    after(() =>
+      notifyClientNewWeeklyContent(emailArgs).catch((err) =>
+        console.error('[email] notify client failed', err),
+      ),
+    )
   }
 
   return NextResponse.json({ ideas: inserted, count: inserted?.length ?? 0 })

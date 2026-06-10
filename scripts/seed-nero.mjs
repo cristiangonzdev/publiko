@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  'https://shmgrhddfatmvwjdkhum.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNobWdyaGRkZmF0bXZ3amRraHVtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTI2Mzg0MSwiZXhwIjoyMDk0ODM5ODQxfQ.jKI7s2r2InbzezeQ8WZw3kjOOx9BFj8dt788b8Bud-8'
-)
+// Credenciales desde el entorno (NUNCA hardcodear la service_role key).
+//   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/seed-nero.mjs
+const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  console.error('Faltan SUPABASE_URL y/o SUPABASE_SERVICE_ROLE_KEY en el entorno')
+  process.exit(1)
+}
+
+const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
 const CLIENT_ID = '65ffd885-77e3-463e-961f-f0526e14d535'
 

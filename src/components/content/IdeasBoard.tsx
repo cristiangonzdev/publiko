@@ -4,6 +4,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
+import {
+  approveIdea,
+  discardIdea,
+  generateIdeas,
+  getIdeaDetail,
+  sendBrainFeedback,
+} from '@/lib/api/ideas'
+import {
+  assignTask,
+  judgeTask,
+  retryBriefs as retryBriefsApi,
+  selectCopy as selectCopyApi,
+  sendToProduction as sendToProductionApi,
+  setApprovalTier,
+  type CopyOption,
+  type EditingBrief,
+  type JudgeVerdict,
+  type RecordingBrief,
+  type TaskDetail,
+} from '@/lib/api/tasks'
 import { AddIdeaModal } from './AddIdeaModal'
 
 const STATUS_COLS = ['suggested', 'approved', 'in_production', 'published', 'discarded'] as const
@@ -24,64 +44,6 @@ const STATUS_COLOR: Record<string, string> = {
 const ORIGIN_BADGE: Record<string, string> = {
   system: 'IA',
   human: 'Humano',
-}
-
-interface RecordingBrief {
-  concept?: string
-  objective?: string
-  planes?: string[]
-  duracion_estimada?: string
-  preparacion?: string[]
-  musica_referencia?: string
-  referencia_visual?: string
-  notas_tecnicas?: string
-}
-
-interface EditingBrief {
-  duracion_final?: string
-  ritmo?: string
-  transiciones?: string
-  texto_pantalla?: string | null
-  tipografia?: string | null
-  musica_exacta?: string
-  color_grade?: string
-  formato_exportacion?: string
-  notas_especiales?: string
-}
-
-interface CopyOption {
-  copy?: string
-  hashtags?: string[]
-  cta?: string
-}
-
-interface JudgeVerdict {
-  passes: boolean
-  score: number
-  issues: string[]
-  reasoning: string
-}
-
-interface TaskDetail {
-  id: string
-  recording_brief: RecordingBrief | null
-  editing_brief: EditingBrief | null
-  copy_options: CopyOption[] | null
-  copy_selected: string | null
-  hashtags: string[] | null
-  cta: string | null
-  status: string
-  grabador_id: string | null
-  editor_id: string | null
-  deadline: string | null
-  bruto_asset_ids: string[] | null
-  approval_tier: 'auto' | 'manual' | null
-  copies_per_platform: Record<string, { copy: string; hashtags: string[]; cta: string | null }> | null
-  judge_verdict: JudgeVerdict | null
-  judge_run_at: string | null
-  auto_publish_blocked_reason: string | null
-  target_platforms: string[] | null
-  publish_at: string | null
 }
 
 interface TeamMember { id: string; full_name: string }
@@ -193,15 +155,12 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
         return
       }
       try {
-        const res = await fetch(`/api/ideas/${ideaId}/detail`)
-        if (res.ok) {
-          const { task } = await res.json() as { task: TaskDetail | null }
-          const brief = task?.recording_brief as Record<string, unknown> | null
-          if (brief && Object.keys(brief).length > 0) {
-            setTaskDetail(task)
-            setGrabadorPick(task?.grabador_id ?? '')
-            setEditorPick(task?.editor_id ?? '')
-          }
+        const task = await getIdeaDetail(ideaId)
+        const brief = task?.recording_brief as Record<string, unknown> | null
+        if (brief && Object.keys(brief).length > 0) {
+          setTaskDetail(task)
+          setGrabadorPick(task?.grabador_id ?? '')
+          setEditorPick(task?.editor_id ?? '')
         }
       } catch { /* silent */ }
     }, 3000)
@@ -213,8 +172,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     setRetryingBriefs(true)
     setPollingTimedOut(false)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/retry-briefs`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
+      await retryBriefsApi(taskDetail.id)
       // Restart polling
       setTaskDetail({ ...taskDetail, recording_brief: {} as RecordingBrief, editing_brief: {} as EditingBrief })
       toast.success('Regenerando briefs, espera unos segundos…')
@@ -230,12 +188,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     const next = taskDetail.approval_tier === 'auto' ? 'manual' : 'auto'
     setTogglingTier(true)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/approval-tier`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: next }),
-      })
-      if (!res.ok) throw new Error(await res.text())
+      await setApprovalTier(taskDetail.id, next)
       setTaskDetail({ ...taskDetail, approval_tier: next })
     } catch (err) {
       toast.error(`Error cambiando tier: ${err instanceof Error ? err.message : String(err)}`)
@@ -248,9 +201,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (!taskDetail) return
     setRunningJudge(true)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/judge`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
-      const { verdict } = await res.json() as { verdict: JudgeVerdict }
+      const verdict = await judgeTask(taskDetail.id)
       setTaskDetail({
         ...taskDetail,
         judge_verdict: verdict,
@@ -268,15 +219,9 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
   const generate = async () => {
     setGenerating(true)
     try {
-      const res = await fetch('/api/ideas/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      const { ideas: newIdeas } = await res.json() as { ideas: Array<Record<string, unknown>> }
+      const newIdeas = await generateIdeas(clientId)
       setIdeas((prev) => [...newIdeas, ...prev])
-      toast.success(`${(newIdeas as unknown[]).length} ideas generadas`)
+      toast.success(`${newIdeas.length} ideas generadas`)
     } catch (err) {
       toast.error(`Error generando ideas: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -288,8 +233,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (loadingId) return
     setLoadingId(ideaId)
     try {
-      const res = await fetch(`/api/ideas/${ideaId}/approve`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
+      await approveIdea(ideaId)
       const original = ideas.find((i) => i.id === ideaId)
       const updated = { ...(original ?? {}), id: ideaId, status: 'approved' }
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? updated : i))
@@ -307,8 +251,10 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (loadingId) return
     setLoadingId(ideaId)
     try {
-      await fetch(`/api/ideas/${ideaId}/discard`, { method: 'POST' })
+      await discardIdea(ideaId)
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'discarded' } : i))
+    } catch (err) {
+      toast.error(`Error descartando idea: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoadingId(null)
     }
@@ -322,13 +268,12 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (['approved', 'in_production', 'published'].includes(status)) {
       setLoadingDetail(true)
       try {
-        const res = await fetch(`/api/ideas/${idea.id as string}/detail`)
-        if (res.ok) {
-          const { task } = await res.json() as { task: TaskDetail | null }
-          setTaskDetail(task)
-          setGrabadorPick(task?.grabador_id ?? '')
-          setEditorPick(task?.editor_id ?? '')
-        }
+        const task = await getIdeaDetail(idea.id as string)
+        setTaskDetail(task)
+        setGrabadorPick(task?.grabador_id ?? '')
+        setEditorPick(task?.editor_id ?? '')
+      } catch (err) {
+        toast.error(`Error cargando briefs: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoadingDetail(false)
       }
@@ -348,12 +293,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (!taskDetail) return
     setSavingCopyIndex(copyIndex)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/select-copy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ copy_index: copyIndex }),
-      })
-      if (!res.ok) throw new Error(await res.text())
+      await selectCopyApi(taskDetail.id, copyIndex)
       const chosen = taskDetail.copy_options?.[copyIndex]
       setTaskDetail({
         ...taskDetail,
@@ -373,15 +313,10 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     if (grabadorPick === (taskDetail.grabador_id ?? '') && editorPick === (taskDetail.editor_id ?? '')) return
     setSavingTeam(true)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/assign`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grabador_id: grabadorPick || null,
-          editor_id: editorPick || null,
-        }),
+      await assignTask(taskDetail.id, {
+        grabador_id: grabadorPick || null,
+        editor_id: editorPick || null,
       })
-      if (!res.ok) throw new Error(await res.text())
       setTaskDetail({
         ...taskDetail,
         grabador_id: grabadorPick || null,
@@ -403,8 +338,7 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     }
     setSendingToProduction(true)
     try {
-      const res = await fetch(`/api/tasks/${taskDetail.id}/to-production`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
+      await sendToProductionApi(taskDetail.id)
       const ideaId = selectedIdea.id as string
       setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, status: 'in_production' } : i))
       setSelectedIdea({ ...selectedIdea, status: 'in_production' })
@@ -450,15 +384,11 @@ export function IdeasBoard({ clientId, initialIdeas, brandBrainCompleted, grabad
     const ideaId = idea.id as string
     if (feedbackSent.has(ideaId)) return
     try {
-      await fetch(`/api/clients/${clientId}/brain/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idea_id: ideaId,
-          concept: idea.concept,
-          angle: idea.angle,
-          content_type: idea.content_type,
-        }),
+      await sendBrainFeedback(clientId, {
+        idea_id: ideaId,
+        concept: idea.concept,
+        angle: idea.angle,
+        content_type: idea.content_type,
       })
       setFeedbackSent((prev) => new Set([...prev, ideaId]))
     } catch {

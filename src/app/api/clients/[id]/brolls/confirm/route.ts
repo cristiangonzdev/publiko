@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
+import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
 
   const { path, file_name, file_type, file_size, description, tags } = await request.json() as {
     path?: string
@@ -19,9 +20,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     tags?: string[]
   }
   if (!path || !file_name) return NextResponse.json({ error: 'path + file_name required' }, { status: 400 })
+  if (!path.startsWith(`brolls/${id}/`) || path.includes('..')) {
+    return NextResponse.json({ error: 'Ruta de archivo inválida' }, { status: 400 })
+  }
 
   const service = await createServiceClient()
-  const { data: { publicUrl } } = service.storage.from('assets').getPublicUrl(path)
 
   const { data: asset, error } = await service
     .from('assets')
@@ -32,16 +35,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       file_size: file_size ?? null,
       storage_type: 'supabase',
       storage_path: path,
-      public_url: publicUrl,
+      public_url: null,
       asset_category: 'b_roll',
       description: description ?? null,
       tags: tags ?? [],
-      uploaded_by: user.id,
+      uploaded_by: auth.ctx.userId,
     })
-    .select('id, file_name, file_type, file_size, public_url, storage_path, description, tags, created_at')
+    .select('id, file_name, file_type, file_size, storage_path, description, tags, created_at')
     .single()
 
   if (error || !asset) return NextResponse.json({ error: error?.message ?? 'asset insert failed' }, { status: 500 })
 
-  return NextResponse.json({ asset_id: asset.id, public_url: publicUrl, asset })
+  const signedUrl = await createSignedDownloadUrl(path)
+  return NextResponse.json({ asset_id: asset.id, asset: { ...asset, signed_url: signedUrl } })
 }

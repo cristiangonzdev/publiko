@@ -6,13 +6,14 @@ import { uploadViaSignedUrl } from '@/lib/upload/signed-upload'
 import { detectAspectRatio } from '@/lib/upload/aspect-ratio'
 import { BrollsPanel } from './BrollsPanel'
 import { BrandVoicePanel } from '@/components/ui/BrandVoicePanel'
+import { CONTENT_STATUS } from '@/lib/status'
 
 const COLS = [
-  { key: 'brutos_ready', label: 'Brutos listos' },
-  { key: 'editing', label: 'En edición' },
-  { key: 'delivered', label: 'Entregado' },
-  { key: 'approved', label: 'Aprobado' },
-  { key: 'published', label: 'Publicado' },
+  { key: 'brutos_ready', label: CONTENT_STATUS.brutos_ready.label },
+  { key: 'editing', label: CONTENT_STATUS.editing.label },
+  { key: 'delivered', label: CONTENT_STATUS.delivered.label },
+  { key: 'approved', label: CONTENT_STATUS.approved.label },
+  { key: 'published', label: CONTENT_STATUS.published.label },
 ] as const
 
 const DEADLINE_COLOR = (deadline: string | null) => {
@@ -27,7 +28,7 @@ const DEADLINE_COLOR = (deadline: string | null) => {
 interface Bruto {
   id: string
   file_name: string
-  public_url: string | null
+  signed_url: string | null
   file_size: number | null
 }
 
@@ -239,7 +240,7 @@ export function EditorKanban({ initialTasks }: Props) {
                               {taskBrutos.map((b) => (
                                 <a
                                   key={b.id}
-                                  href={b.public_url ?? '#'}
+                                  href={b.signed_url ?? '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-between gap-2 py-1 text-xs text-brand hover:underline"

@@ -6,6 +6,10 @@ import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 import { loadWinnerExamples } from '@/lib/winning-patterns/examples'
 
+// La generación de briefs corre en after() pero cuenta dentro de la duración
+// de la función: sin esto Vercel mata el proceso a mitad de generación.
+export const maxDuration = 120
+
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
