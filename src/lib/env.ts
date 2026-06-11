@@ -25,6 +25,9 @@ const serverSchema = z.object({
   TELEGRAM_ADMIN_CHAT_ID: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().optional(),
+  EVOLUTION_API_URL: z.string().url().optional(),
+  EVOLUTION_API_KEY: z.string().optional(),
+  EVOLUTION_INSTANCE: z.string().optional(),
   CRON_SECRET: z.string().min(1),
   WEBHOOK_SECRET: z.string().min(1),
 })

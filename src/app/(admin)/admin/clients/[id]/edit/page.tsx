@@ -60,6 +60,13 @@ export default async function EditClientPage({ params, searchParams }: Props) {
           : {}),
         gmb_account_id: getValue('gmb_account_id'),
         gmb_location_id: getValue('gmb_location_id'),
+        fiscal_name: getValue('fiscal_name'),
+        nif: getValue('nif'),
+        fiscal_address: getValue('fiscal_address'),
+        fiscal_city: getValue('fiscal_city'),
+        fiscal_postal_code: getValue('fiscal_postal_code'),
+        fiscal_country: getValue('fiscal_country') ?? 'ES',
+        billing_email: getValue('billing_email'),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -158,6 +165,43 @@ export default async function EditClientPage({ params, searchParams }: Props) {
             <div>
               <label className="block text-sm font-medium text-ink-700">Fin contrato</label>
               <input type="date" name="contract_end" defaultValue={client.contract_end ?? ''} className={inputClass} />
+            </div>
+          </div>
+        </section>
+
+        {/* Datos fiscales */}
+        <section>
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Datos fiscales</h2>
+          <p className="mb-4 text-xs text-ink-400">Aparecen en las facturas. Sin razón social y NIF no se puede facturar a este cliente.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-ink-700">Razón social</label>
+              <input type="text" name="fiscal_name" defaultValue={clientAny.fiscal_name ?? ''} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-700">NIF</label>
+              <input type="text" name="nif" defaultValue={clientAny.nif ?? ''} className={inputClass} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-ink-700">Dirección fiscal</label>
+              <input type="text" name="fiscal_address" defaultValue={clientAny.fiscal_address ?? ''} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-700">Ciudad</label>
+              <input type="text" name="fiscal_city" defaultValue={clientAny.fiscal_city ?? ''} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-700">Código postal</label>
+              <input type="text" name="fiscal_postal_code" defaultValue={clientAny.fiscal_postal_code ?? ''} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-700">País</label>
+              <input type="text" name="fiscal_country" defaultValue={clientAny.fiscal_country ?? 'ES'} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-700">Email de facturación</label>
+              <p className="mb-1 text-[11px] text-ink-400">Si está vacío, las facturas se envían al email de contacto</p>
+              <input type="email" name="billing_email" defaultValue={clientAny.billing_email ?? ''} className={inputClass} />
             </div>
           </div>
         </section>
