@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { orgMismatch, requireAdmin } from '@/lib/auth/guards'
 import { replyReview } from '@/lib/gmb'
 
 export const runtime = 'nodejs'
@@ -20,17 +20,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: review } = await (service.from('reviews') as any)
-    .select('id, client_id, source, external_review_id, clients!inner(gmb_account_id, gmb_location_id)')
+    .select('id, client_id, source, external_review_id, clients!inner(gmb_account_id, gmb_location_id, organization_id)')
     .eq('id', id)
     .single() as { data: {
       id: string
       client_id: string
       source: string | null
       external_review_id: string | null
-      clients: { gmb_account_id: string | null; gmb_location_id: string | null }
+      clients: { gmb_account_id: string | null; gmb_location_id: string | null; organization_id: string | null }
     } | null }
 
   if (!review) return NextResponse.json({ error: 'Reseña no encontrada' }, { status: 404 })
+
+  // El service client bypasea RLS: la reseña debe ser de la org del admin.
+  if (orgMismatch(auth.ctx, review.clients.organization_id)) {
+    return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
+  }
 
   // Si es GMB y tenemos credentials, publicar de verdad
   const gmb = review.clients

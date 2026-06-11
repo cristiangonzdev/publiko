@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext, orgMismatch } from '@/lib/auth/guards'
 
 interface MarkWinnerBody {
   reason?: string
@@ -17,13 +18,10 @@ function extractHook(copy: string): string {
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') {
+  const ctx = await getAuthContext()
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (ctx.role !== 'admin') {
     return NextResponse.json({ error: 'Solo admin puede marcar ganadores' }, { status: 403 })
   }
 
@@ -61,6 +59,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (postFetchErr && !post) return NextResponse.json({ error: postFetchErr.message }, { status: 500 })
   if (!post) return NextResponse.json({ error: 'Post no encontrado' }, { status: 404 })
+
+  // El service client bypasea RLS: el post debe pertenecer a la org del admin.
+  const { data: ownerClient } = await service
+    .from('clients')
+    .select('organization_id')
+    .eq('id', post.client_id)
+    .single()
+  if (!ownerClient || orgMismatch(ctx, ownerClient.organization_id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   // content_type vive en content_tasks; angle/concept en content_ideas,
   // enlazado por content_tasks.idea_id (no existen como columnas en tasks).
@@ -138,7 +146,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       features,
       manual_reason: reason,
       metrics_snapshot: metricsSnapshot,
-      marked_by: user.id,
+      marked_by: ctx.userId,
       active: true,
     })
     .select('id')

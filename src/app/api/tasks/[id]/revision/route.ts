@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { notifyUser } from '@/lib/telegram'
 import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireTaskAccess(id, { roles: [] })
+  if (!auth.ok) return auth.response
 
   const { note } = await request.json() as { note: string }
   const service = await createServiceClient()

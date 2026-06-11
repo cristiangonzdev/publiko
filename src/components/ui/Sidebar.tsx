@@ -31,6 +31,7 @@ function IconHistory()    { return <svg className="h-4 w-4" fill="none" viewBox=
 function IconMetrics()    { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M16 8v8m-8-5v5M8 3v1m8-1v1M4 20h16"/></svg> }
 function IconAssets()     { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg> }
 function IconContent()    { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4"/></svg> }
+function IconSettings()   { return <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg> }
 
 const adminNav: NavItem[] = [
   { href: '/admin',           label: 'Dashboard',           icon: <IconDashboard /> },
@@ -45,6 +46,7 @@ const adminNav: NavItem[] = [
   { href: '/admin/invoices',  label: 'Facturación',         icon: <IconInvoice /> },
   { href: '/admin/atascado',  label: 'Atascado',            icon: <IconAlert />, alert: true },
   { href: '/admin/users',     label: 'Equipo',              icon: <IconUsers /> },
+  { href: '/admin/settings/agency', label: 'Ajustes',       icon: <IconSettings /> },
 ]
 
 const editorNav: NavItem[] = [
@@ -84,9 +86,10 @@ const roleMeta: Record<string, { label: string; dot: string }> = {
 interface SidebarProps {
   role: string
   email: string
+  orgName?: string | null
 }
 
-export function Sidebar({ role, email }: SidebarProps) {
+export function Sidebar({ role, email, orgName }: SidebarProps) {
   const pathname = usePathname()
   const nav      = navByRole[role] ?? adminNav
   const meta     = roleMeta[role] ?? roleMeta.admin
@@ -123,6 +126,7 @@ export function Sidebar({ role, email }: SidebarProps) {
       <div className="border-t border-ink-200 p-3">
         <div className="flex items-center gap-2 mb-2">
           <div className="min-w-0 flex-1">
+            {orgName && <p className="truncate text-xs font-medium text-ink-700">{orgName}</p>}
             <p className="truncate text-[11px] text-ink-400">{email}</p>
           </div>
           {role !== 'cliente' && <NotificationBell />}

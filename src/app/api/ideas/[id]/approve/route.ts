@@ -1,6 +1,7 @@
 import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext, orgMismatch } from '@/lib/auth/guards'
 import { generateCopyOptions, generateBriefs, generateCopiesPerPlatform } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
@@ -12,23 +13,26 @@ export const maxDuration = 120
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const ctx = await getAuthContext()
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (ctx.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const service = await createServiceClient()
 
   const { data: idea } = await service
     .from('content_ideas')
-    .select('*, clients!inner(business_name, daily_generation_config)')
+    .select('*, clients!inner(business_name, daily_generation_config, organization_id)')
     .eq('id', id)
     .single()
 
   if (!idea) return NextResponse.json({ error: 'Idea not found' }, { status: 404 })
+
+  // El service client bypasea RLS: la idea debe pertenecer a la org del admin.
+  const ideaOrg = (idea.clients as unknown as { organization_id: string | null })?.organization_id
+  if (orgMismatch(ctx, ideaOrg)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const [{ data: brain }, winningPatterns] = await Promise.all([
     service
@@ -41,7 +45,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   await service
     .from('content_ideas')
-    .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: user.id })
+    .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: ctx.userId })
     .eq('id', id)
 
   // Create task immediately (empty briefs) so the drawer opens right away

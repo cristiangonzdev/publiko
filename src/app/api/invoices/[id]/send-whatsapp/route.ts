@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireInvoiceAccess } from '@/lib/auth/guards'
 import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 import { isEvolutionConfigured, sendDocument } from '@/lib/whatsapp/evolution'
 
@@ -10,7 +10,8 @@ const BUCKET = 'invoices'
 const WHATSAPP_TTL_SECONDS = 7 * 24 * 3600
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
   if (!isEvolutionConfigured()) {
@@ -20,7 +21,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     )
   }
 
-  const { id } = await params
   const service = await createServiceClient()
 
   const { data: invoice } = await service
@@ -35,7 +35,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const [{ data: client }, { data: settings }] = await Promise.all([
     service.from('clients').select('business_name, contact_whatsapp, contact_phone').eq('id', invoice.client_id).single(),
-    service.from('agency_settings').select('agency_name').limit(1).maybeSingle(),
+    service.from('agency_settings').select('agency_name').eq('organization_id', auth.ctx.organizationId ?? '00000000-0000-0000-0000-000000000000').maybeSingle(),
   ])
   if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 

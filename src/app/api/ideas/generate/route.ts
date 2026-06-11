@@ -4,16 +4,16 @@ import { generateWeeklyIdeas } from '@/lib/claude'
 import { notifyAdmin } from '@/lib/telegram'
 import { loadWinningPatterns, attachWinningPatterns } from '@/lib/winning-patterns/inject'
 import { notifyClientNewWeeklyContent } from '@/lib/email/notifications'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin()
+  const { client_id } = await request.json() as { client_id: string }
+  if (!client_id) return NextResponse.json({ error: 'client_id required' }, { status: 400 })
+
+  const auth = await requireClientAccess(client_id, { adminOnly: true })
   if (!auth.ok) return auth.response
 
   const supabase = await createClient()
-
-  const { client_id } = await request.json() as { client_id: string }
-  if (!client_id) return NextResponse.json({ error: 'client_id required' }, { status: 400 })
 
   const [{ data: brain }, { data: recentIdeas }, winningPatterns] = await Promise.all([
     supabase.from('brand_brains').select('*').eq('client_id', client_id).single(),

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireInvoiceAccess } from '@/lib/auth/guards'
 import { sendClientEmail } from '@/lib/email/notifications'
 
 const BUCKET = 'invoices'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const service = await createServiceClient()
 
   const { data: invoice } = await service
@@ -24,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const [{ data: client }, { data: settings }] = await Promise.all([
     service.from('clients').select('business_name, billing_email, contact_email').eq('id', invoice.client_id).single(),
-    service.from('agency_settings').select('agency_name, payment_terms_days, iban').limit(1).maybeSingle(),
+    service.from('agency_settings').select('agency_name, payment_terms_days, iban').eq('organization_id', auth.ctx.organizationId ?? '00000000-0000-0000-0000-000000000000').maybeSingle(),
   ])
   if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
   if (!settings) return NextResponse.json({ error: 'agency_settings_missing' }, { status: 409 })

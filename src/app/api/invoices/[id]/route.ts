@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
 import { computeTotals, normalizeLines } from '@/lib/invoices/totals'
+import { requireInvoiceAccess } from '@/lib/auth/guards'
 import type { Database, InvoiceLine, Json } from '@/types/supabase'
 
 type InvoiceUpdate = Database['public']['Tables']['invoices']['Update']
@@ -24,10 +24,10 @@ const patchSchema = z.object({
 })
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Datos inválidos', details: parsed.error.issues }, { status: 400 })
@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: settings } = await service
       .from('agency_settings')
       .select('irpf_rate')
-      .limit(1)
+      .eq('organization_id', auth.ctx.organizationId ?? '00000000-0000-0000-0000-000000000000')
       .maybeSingle()
     if (!settings) return NextResponse.json({ error: 'agency_settings_missing' }, { status: 409 })
 

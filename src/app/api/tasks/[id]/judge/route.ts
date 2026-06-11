@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { judgeContent, type JudgeVerdict } from '@/lib/claude'
 
 export const runtime = 'nodejs'
@@ -8,10 +8,9 @@ export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireTaskAccess(id, { roles: [] })
+  if (!auth.ok) return auth.response
 
   const service = await createServiceClient()
   const { data: task } = await service

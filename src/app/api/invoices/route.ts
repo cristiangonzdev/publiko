@@ -26,6 +26,10 @@ const createSchema = z.object({
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.response
+  const orgId = auth.ctx.organizationId
+  if (!orgId) {
+    return NextResponse.json({ error: 'Tu usuario no tiene organización asignada' }, { status: 409 })
+  }
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
@@ -38,16 +42,18 @@ export async function POST(request: NextRequest) {
   const { data: settings } = await service
     .from('agency_settings')
     .select('id, agency_name, irpf_rate, payment_terms_days')
-    .limit(1)
+    .eq('organization_id', orgId)
     .maybeSingle()
   if (!settings) {
     return NextResponse.json({ error: 'agency_settings_missing' }, { status: 409 })
   }
 
+  // El cliente debe pertenecer a la org del admin (service client bypasea RLS).
   const { data: client } = await service
     .from('clients')
     .select('id, business_name')
     .eq('id', body.client_id)
+    .eq('organization_id', orgId)
     .is('deleted_at', null)
     .single()
   if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
   if (!lines.length) return NextResponse.json({ error: 'La factura no tiene líneas válidas' }, { status: 400 })
   const totals = computeTotals(lines, settings.irpf_rate)
 
-  const { data: invoiceNumber, error: numberError } = await service.rpc('next_invoice_number')
+  const { data: invoiceNumber, error: numberError } = await service.rpc('next_invoice_number', { p_org: orgId })
   if (numberError || !invoiceNumber) {
     const missing = numberError?.message?.includes('agency_settings_missing')
     return NextResponse.json(
@@ -73,6 +79,7 @@ export async function POST(request: NextRequest) {
     .from('invoices')
     .insert({
       client_id: body.client_id,
+      organization_id: orgId,
       invoice_number: invoiceNumber,
       invoice_type: body.invoice_type,
       description: body.description ?? null,

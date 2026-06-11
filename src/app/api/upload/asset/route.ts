@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const form = await request.formData()
   const file = form.get('file') as File | null
   const clientId = form.get('client_id') as string | null
@@ -14,6 +11,9 @@ export async function POST(request: NextRequest) {
   if (!file || !clientId) {
     return NextResponse.json({ error: 'file and client_id required' }, { status: 400 })
   }
+
+  const auth = await requireClientAccess(clientId, { adminOnly: true })
+  if (!auth.ok) return auth.response
 
   const service = await createServiceClient()
   const arrayBuffer = await file.arrayBuffer()

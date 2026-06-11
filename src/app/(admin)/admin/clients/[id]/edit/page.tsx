@@ -31,6 +31,10 @@ export default async function EditClientPage({ params, searchParams }: Props) {
     if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
     const svc = await createServiceClient()
 
+    // El cliente debe pertenecer a la org del admin (service client bypasea RLS).
+    const { data: target } = await svc.from('clients').select('organization_id').eq('id', id).single()
+    if (!target || target.organization_id !== ctx.organizationId) throw new Error('No autorizado')
+
     const getValue = (key: string) => (formData.get(key) as string | null) || null
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

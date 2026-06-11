@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireInvoiceAccess } from '@/lib/auth/guards'
 import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 
 const BUCKET = 'invoices'
@@ -14,10 +14,10 @@ const MAX_PDF_BYTES = 2 * 1024 * 1024 // los PDFs de factura rondan los 50-200 K
  * flujo prepare/confirm de los assets.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const service = await createServiceClient()
 
   const { data: invoice } = await service
@@ -57,10 +57,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 /** GET: devuelve una signed URL temporal (1h) para visualizar el PDF. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const service = await createServiceClient()
 
   const { data: invoice } = await service

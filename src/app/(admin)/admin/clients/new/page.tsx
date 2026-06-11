@@ -5,7 +5,7 @@ import { getAuthContext } from '@/lib/auth/guards'
 async function createClient(formData: FormData) {
   'use server'
   const ctx = await getAuthContext()
-  if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
+  if (!ctx || ctx.role !== 'admin' || !ctx.organizationId) throw new Error('No autorizado')
   const supabase = await createServiceClient()
 
   const businessName = formData.get('business_name') as string
@@ -28,6 +28,7 @@ async function createClient(formData: FormData) {
       fiscal_name: optional('fiscal_name'),
       nif: optional('nif'),
       billing_email: optional('billing_email'),
+      organization_id: ctx.organizationId,
       status: 'lead',
     })
     .select('id')

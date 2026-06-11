@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 
 export const runtime = 'nodejs'
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const auth = await requireAdmin()
+  const auth = await requireClientAccess(id, { adminOnly: true })
   if (!auth.ok) return auth.response
 
   const { path, file_name, file_type, file_size, description, tags } = await request.json() as {

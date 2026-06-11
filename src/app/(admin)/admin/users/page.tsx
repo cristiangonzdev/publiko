@@ -1,8 +1,10 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { UsersManager } from '@/components/admin/UsersManager'
 
 export default async function UsersPage() {
-  const supabase = await createServiceClient()
+  // createClient (anon + RLS): las policies multi-org devuelven solo los
+  // profiles de la organización del admin.
+  const supabase = await createClient()
   const { data: users } = await supabase
     .from('profiles')
     .select('id, full_name, email, role, is_active, created_at')

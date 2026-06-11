@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/guards'
 import { createSignedDownloadUrl } from '@/lib/upload/signed-download'
 
 async function saveAgencySettings(formData: FormData) {
   'use server'
   const ctx = await getAuthContext()
-  if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
+  if (!ctx || ctx.role !== 'admin' || !ctx.organizationId) throw new Error('No autorizado')
   const supabase = await createServiceClient()
 
   const text = (name: string) => {
@@ -45,11 +45,16 @@ async function saveAgencySettings(formData: FormData) {
     irpf_rate: num('irpf_rate', 15.0),
   }
 
-  const { data: existing } = await supabase.from('agency_settings').select('id').limit(1).maybeSingle()
+  // Una fila por organización (service client bypasea RLS: filtrar por org).
+  const { data: existing } = await supabase
+    .from('agency_settings')
+    .select('id')
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle()
 
   const { error } = existing
     ? await supabase.from('agency_settings').update(values).eq('id', existing.id)
-    : await supabase.from('agency_settings').insert(values)
+    : await supabase.from('agency_settings').insert({ ...values, organization_id: ctx.organizationId })
 
   if (error) redirect('/admin/settings/agency?error=save')
   redirect('/admin/settings/agency?saved=true')
@@ -70,7 +75,8 @@ const errorMessages: Record<string, string> = {
 
 export default async function AgencySettingsPage({ searchParams }: Props) {
   const { error, saved } = await searchParams
-  const supabase = await createServiceClient()
+  // createClient (anon + RLS): tras 0019 las policies devuelven solo la fila de la org.
+  const supabase = await createClient()
   const { data: settings } = await supabase.from('agency_settings').select('*').limit(1).maybeSingle()
 
   // Logo: si es URL https se usa tal cual; si es path de Storage se firma para el preview.
