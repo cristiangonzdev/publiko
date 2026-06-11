@@ -105,6 +105,7 @@ Node.js target: ES2022
 │   │   ├── login/
 │   │   │   ├── page.tsx
 │   │   │   └── actions.ts
+│   │   ├── setup/                     ← Bootstrap si organizations está vacía (instalación limpia)
 │   │   ├── auth/callback/route.ts     ← OAuth callback de Supabase
 │   │   ├── (admin)/
 │   │   │   ├── layout.tsx
@@ -128,7 +129,10 @@ Node.js target: ES2022
 │   │   │       ├── review/            ← Entregables para revisar
 │   │   │       ├── reviews/           ← Reseñas Google My Business
 │   │   │       ├── tasks/             ← Todas las tareas
-│   │   │       └── users/             ← Gestión de usuarios/roles
+│   │   │       ├── users/             ← Gestión de usuarios/roles
+│   │   │       └── settings/
+│   │   │           ├── agency/        ← Datos fiscales de la agencia (facturas)
+│   │   │           └── organization/  ← Nombre, slug y miembros de la organización
 │   │   ├── (editor)/
 │   │   │   └── editor/
 │   │   │       ├── page.tsx           ← Kanban de edición
@@ -173,7 +177,8 @@ Node.js target: ES2022
 │   │       └── winning-patterns/
 │   ├── components/
 │   │   ├── ui/                        ← Sidebar, NotificationBell, WorkloadSummary, ProductionCalendar
-│   │   ├── admin/                     ← TasksManager, UsersManager, GenerationConfigPanel, etc.
+│   │   ├── admin/                     ← TasksManager, UsersManager, GenerationConfigPanel, InvoiceManager, etc.
+│   │   ├── invoices/                  ← InvoiceForm, InvoiceDetail, InvoicePDF (react-pdf), generatePdf
 │   │   ├── brand-brain/               ← BrandBrainForm + 6 steps (Step1Identity…Step6Operations)
 │   │   ├── content/                   ← IdeasBoard, GlobalIdeasBoard, AddIdeaModal, ReviewsManager
 │   │   ├── crm/                       ← PipelineBoard
@@ -199,7 +204,9 @@ Node.js target: ES2022
 │   │   ├── drive/index.ts            ← createClientFolder, getClientFolderFiles, uploadAssetToDrive
 │   │   ├── gmb/index.ts              ← publishLocalPost, getGMBReviews
 │   │   ├── telegram/index.ts         ← notifyAdmin, notifyUser
-│   │   ├── email/notifications.ts    ← notifyClientNewWeeklyContent, notifyClientHumanInputNeeded
+│   │   ├── whatsapp/evolution.ts     ← sendDocument vía Evolution API (opcional, 503 si no config)
+│   │   ├── invoices/totals.ts        ← computeTotals: única fuente del cálculo de factura
+│   │   ├── email/notifications.ts    ← notifyClientNewWeeklyContent, notifyClientHumanInputNeeded (+ attachments)
 │   │   ├── winning-patterns/
 │   │   │   ├── detect.ts             ← detectWinners (engagement > p75 baseline)
 │   │   │   └── inject.ts             ← attachWinningPatterns, formatWinningPatterns
@@ -220,11 +227,16 @@ Node.js target: ES2022
         ├── 0007_gmb_integration.sql  ← gmb_account_id, gmb_location_id, external_review_id
         ├── 0008_notifications.sql    ← Tabla notifications con RLS in-app
         ├── 0009_facebook_page_id.sql ← Separar facebook_page_id de meta_business_id
-        ├── 0010_crm_activities.sql   ← Tabla crm_activities (notas CRM admin-only)
-        ├── 0011_ai_visibility.sql    ← Tabla ai_visibility_snapshots (geo / visibilidad IA)
+        ├── 0010_youtube_shorts.sql   ← Plataforma youtube_shorts
+        ├── 0011_geo_addon.sql        ← Tabla ai_visibility_snapshots (geo / visibilidad IA)
         ├── 0012_brain_revisions.sql  ← Tabla brand_brain_revisions (historial de refinamientos)
-        ├── 0013_analytics_reports.sql ← Crons analytics/harvest + reports/generate
-        └── 0014_security.sql         ← Hardening de seguridad (RLS / guards)
+        ├── 0013_report_churn.sql     ← Churn risk en weekly_reports
+        ├── 0014_security_hardening.sql ← Hardening: RLS, RPCs con guard, bucket privado
+        ├── 0015_agency_settings.sql  ← Tabla agency_settings (datos fiscales agencia)
+        ├── 0016_invoicing_fiscal.sql ← Fiscales en clients + líneas/IGIC/IRPF en invoices
+        ├── 0017_invoices_storage_numbering.sql ← Bucket privado 'invoices' + RPC numeración
+        ├── 0018_organizations.sql    ← Multi-agencia: organizations + organization_id + backfill
+        └── 0019_rls_multi_org.sql    ← RLS con scope de org + RPCs org-aware
 ```
 
 ---
@@ -266,12 +278,14 @@ discarded   ← terminal descartado por admin
 
 ---
 
-## Las 13 tablas principales
+## Las 15 tablas principales
 
 | Tabla | Propósito |
 |-------|-----------|
-| `profiles` | Usuarios del sistema (admin, editor, grabador, cliente) — extiende `auth.users` |
-| `clients` | Clientes (negocios): datos de contacto, facturación, credenciales Meta/GMB/Drive, equipo asignado |
+| `organizations` | Agencias (multi-tenant). Aislamiento total por RLS; cada profile/client/invoice pertenece a una org |
+| `agency_settings` | Datos fiscales y de facturación de la agencia (NIF, IBAN, IGIC/IRPF, numeración) — una fila por org |
+| `profiles` | Usuarios del sistema (admin, editor, grabador, cliente) — extiende `auth.users`, con `organization_id` |
+| `clients` | Clientes (negocios): contacto, datos fiscales, facturación, credenciales Meta/GMB/Drive, equipo asignado |
 | `brand_brains` | Perfil estratégico del cliente en 10 secciones JSONB — alimenta todos los prompts de Claude |
 | `content_ideas` | Ideas de contenido generadas por Claude o propuestas por humanos |
 | `content_tasks` | Producción end-to-end: grabación + edición + publicación de una pieza |
@@ -284,9 +298,11 @@ discarded   ← terminal descartado por admin
 | `invoices` | Facturas (setup y recurrentes) con estado de pago |
 | `notifications` | Log de notificaciones in-app con read_at para el badge de campana |
 
-**Tablas adicionales (16 en total):** `crm_activities` (notas CRM admin-only), `ai_visibility_snapshots` (snapshots de visibilidad IA / geo) y `brand_brain_revisions` (historial de refinamientos del Brand Brain).
+**Tablas adicionales (18 en total):** `crm_activities` (notas CRM admin-only), `ai_visibility_snapshots` (snapshots de visibilidad IA / geo) y `brand_brain_revisions` (historial de refinamientos del Brand Brain).
 
-RPCs clave: `get_mrr_total()`, `get_posts_to_publish()`, `compute_client_baseline(client_id)`, `get_winning_patterns_for_prompt(client_id)`, `current_user_role()`.
+RPCs clave: `get_mrr_total()` (org-aware para admin, global para service_role), `get_posts_to_publish()`, `compute_client_baseline(client_id)`, `get_winning_patterns_for_prompt(client_id)`, `current_user_role()`, `get_my_org_id()`, `next_invoice_number(p_org?)` (numeración atómica por org).
+
+**Multi-agencia:** dos capas de aislamiento. (1) RLS: las policies de admin exigen `organization_id = get_my_org_id()` (directo o vía join a `clients`). (2) Aplicación: toda ruta/server action que use `createServiceClient()` (bypasea RLS) debe verificar la org — los guards `requireClientAccess`, `requireTaskAccess` y `requireInvoiceAccess` ya lo hacen para admin. Las tablas hijas de `clients` heredan la org vía join; solo `profiles`, `clients`, `invoices` y `agency_settings` tienen `organization_id` directo. Crons y webhooks (service role + secret) son org-agnósticos por diseño. Tests: `node --env-file=.env.local scripts/test-rls.mjs`.
 
 ---
 
@@ -349,6 +365,11 @@ TELEGRAM_ADMIN_CHAT_ID=
 # Resend — email al cliente (privada)
 RESEND_API_KEY=
 RESEND_FROM=
+
+# Evolution API — WhatsApp (privada, opcional: sin ella el envío devuelve 503)
+EVOLUTION_API_URL=
+EVOLUTION_API_KEY=
+EVOLUTION_INSTANCE=
 
 # Secrets para crons y webhooks (privada)
 CRON_SECRET=
