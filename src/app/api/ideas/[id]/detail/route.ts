@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireAdmin, orgMismatch } from '@/lib/auth/guards'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
@@ -17,6 +17,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (!idea) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // El service client bypasea RLS: la idea debe pertenecer a la org del admin.
+  const { data: ownerClient } = await service
+    .from('clients')
+    .select('organization_id')
+    .eq('id', idea.client_id)
+    .single()
+  if (!ownerClient || orgMismatch(auth.ctx, ownerClient.organization_id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: task } = await service
     .from('content_tasks')

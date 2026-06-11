@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireTaskAccess, orgMismatch } from '@/lib/auth/guards'
 import { notifyUser, TG } from '@/lib/telegram'
 import { createNotification, notifTitle } from '@/lib/notifications'
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireTaskAccess(id, { roles: [] })
+  if (!auth.ok) return auth.response
 
   const { grabador_id, editor_id, deadline, target_platforms, publish_at } = await request.json() as {
     grabador_id?: string
@@ -26,6 +25,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (publish_at) updates.publish_at = publish_at
 
   const service = await createServiceClient()
+
+  // Los profiles asignados deben pertenecer a la org del admin que asigna.
+  const idsToCheck = [grabador_id, editor_id].filter(Boolean) as string[]
+  if (idsToCheck.length) {
+    const { data: assignees } = await service
+      .from('profiles')
+      .select('id, organization_id')
+      .in('id', idsToCheck)
+    const allInOrg = (assignees ?? []).length === idsToCheck.length
+      && (assignees ?? []).every(p => !orgMismatch(auth.ctx, p.organization_id))
+    if (!allInOrg) {
+      return NextResponse.json({ error: 'El miembro asignado no pertenece a tu organización' }, { status: 403 })
+    }
+  }
 
   const { data: task } = await service
     .from('content_tasks')

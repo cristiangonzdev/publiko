@@ -131,3 +131,59 @@ El pipeline usaba `claude-sonnet-4-6` para todas las llamadas a Claude, incluida
 - Haiku es ~3× más barato que Sonnet; el ahorro es notable dado el volumen de llamadas de scoring.
 - En tareas de rúbrica/clasificación Haiku rinde de forma equivalente, sin pérdida de calidad observable.
 - Hay que vigilar dos IDs de modelo en el código. Cualquier cambio de modelo creativo sigue requiriendo actualizar la nota de `CLAUDE.md` (`claude-sonnet-4-6`).
+
+---
+
+## ADR-005: Facturación — PDF en browser, bucket privado y numeración secuencial por organización
+
+**Estado:** Aceptado
+**Fecha:** 2026-06-11
+
+### Contexto
+La tabla `invoices` existía desde 0001 pero solo soportaba un importe plano (`amount integer`, euros) generado por `generate-monthly`, sin desglose fiscal ni PDF (la columna `pdf_url` nunca se rellenaba). Se necesita facturación real: datos fiscales de agencia y cliente, líneas con IGIC/IRPF, PDF descargable y envío por email y WhatsApp.
+
+### Decisión
+- **Extensión, no sustitución:** `invoices` gana `lines jsonb`, `subtotal/tax_amount/irpf_amount numeric(10,2)`, `notes`, `sent_at`, `created_by` (migration 0016). `amount` se conserva y se sincroniza con `round(total)` al guardar — el código existente (KPIs, marcar pagada) no se toca.
+- **PDF generado en el browser** con `@react-pdf/renderer` (importado siempre con `dynamic`/`import()` — no es SSR-safe) y subido al **bucket privado `invoices`** (0017). `pdf_url` guarda el *path* de Storage, nunca una URL: la visualización firma bajo demanda (TTL 1h), el email adjunta el PDF (Resend `attachments`) y WhatsApp recibe una signed URL de 7 días. Coherente con ADR-003.
+- **Numeración secuencial atómica** vía RPC `next_invoice_number()`: `UPDATE agency_settings SET next_invoice_number = next_invoice_number + 1 … RETURNING` (row lock → sin carreras). Formato `{prefix}-{YYYY}-{NNNN}`, disjunto del formato legado `INV-YYYY-MM-XXXXXX` → coexisten bajo el mismo UNIQUE. El dedupe de `generate-monthly` pasa de número determinista a `client_id + invoice_type + period_start`.
+- **Totales siempre recalculados server-side** (`src/lib/invoices/totals.ts`, única fuente del cálculo); del cliente solo se aceptan las líneas.
+- **Evolution API opcional:** vars `EVOLUTION_*` como `optional()` en env.ts; sin configurar, el endpoint de WhatsApp devuelve 503 con mensaje claro.
+
+### Alternativas consideradas
+- **PDF server-side (puppeteer/pdfkit):** más control pero binarios pesados en serverless y cold starts; react-pdf en browser es suficiente para una factura.
+- **URL pública para el PDF:** más simple, pero una factura contiene NIF, IBAN e importes — viola la regla nº2 de seguridad del proyecto.
+- **Numeración determinista por cliente+mes (statu quo):** colisiona con la numeración legal correlativa que exige una serie por agencia.
+
+### Consecuencias
+- El KPI "Por cobrar" pasa a incluir IGIC (`amount` = total con impuestos) para las facturas nuevas.
+- Las facturas legadas (sin líneas) se pueden marcar como pagadas pero no generan PDF.
+- Sin `agency_settings` no se puede facturar: la UI redirige a la página de ajustes de agencia.
+
+---
+
+## ADR-006: Multi-agencia — org seed con UUID fijo, RLS por capa y aislamiento en service client
+
+**Estado:** Aceptado
+**Fecha:** 2026-06-11
+
+### Contexto
+Dos agencias conocidas (Logika Digital + una segunda) van a usar Publiko con aislamiento total. No es SaaS público: acceso controlado, sin billing por plan. El sistema era single-agency: todas las tablas colgaban de `clients` y las policies de admin daban acceso global.
+
+### Decisión
+- **Tabla `organizations`** (0018) con **seed determinista** `a0000000-0000-4000-8000-000000000001` = "Logika Digital". El backfill de todos los datos existentes se hace **en la migration** (no en la página de setup): es lo que hace 0018 compatible con el código wave-A ya desplegado.
+- **`organization_id` solo en tablas raíz** (`profiles`, `clients`, `invoices`, `agency_settings`) con **DEFAULT transicional** a la seed y NOT NULL. Las 12 tablas hijas heredan la org vía join a `clients`. `invoices` lo lleva directo para simplificar RLS y la numeración por org (`UNIQUE(organization_id, invoice_number)`).
+- **RLS por capa** (0019): solo se reescriben las policies de admin añadiendo `organization_id = get_my_org_id()` (directo o vía EXISTS a clients); las policies por rol (editor/grabador/cliente) no se tocan — ya son single-user y la app valida que las asignaciones no crucen orgs. `get_my_org_id()` es SECURITY DEFINER (mismo mecanismo sin recursión que `current_user_role()`).
+- **Doble capa obligatoria:** RLS no protege los paths con `createServiceClient()`. Los guards centrales (`requireClientAccess`, `requireTaskAccess`, `requireInvoiceAccess`) verifican la org también para admin, y toda ruta/server action con service client filtra o verifica `organization_id` explícitamente. Crons y webhooks (CRON_SECRET + service role) siguen siendo org-agnósticos por diseño.
+- **Invitaciones sin tabla `invites`:** se reutiliza el POST de usuarios existente (password temporal mostrada al admin), que ahora asigna la org del creador. `inviteUserByEmail` queda descartado por ahora (YAGNI).
+- **RPCs org-aware con firma compatible:** `get_mrr_total()` y `get_upcoming_renewals()` filtran por org para admin y siguen siendo globales para service_role (crons intactos).
+
+### Alternativas consideradas
+- **Backfill en runtime durante el setup:** dejaría una ventana en la que el código viejo inserta filas sin org; la migration con seed la elimina.
+- **`organization_id` en todas las tablas:** más índices y migraciones sin beneficio — el join a clients es barato (PK + idx_clients_org) y más difícil de desincronizar.
+- **Confiar solo en RLS:** insuficiente: ~50 archivos usan service client.
+
+### Consecuencias
+- Código futuro que inserte en tablas raíz sin `organization_id` cae silenciosamente en la org seed — aceptado como transición; una migration futura (0020+) puede retirar los DEFAULT cuando wave B esté estabilizada.
+- La org 2 se crea manualmente (SQL con service role) DESPUÉS de desplegar wave B, junto con su primer admin.
+- Aislamiento verificable con `scripts/test-rls.mjs` (2 orgs de prueba + cleanup, exit 1 si falla).
+- El admin ya no ve notificaciones de otros usuarios (la campana siempre fue por usuario).

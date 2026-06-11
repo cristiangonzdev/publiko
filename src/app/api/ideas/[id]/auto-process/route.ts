@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext, orgMismatch, type AuthContext } from '@/lib/auth/guards'
 import {
   generateCopyOptions,
   generateBriefs,
@@ -33,23 +34,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const authHeader = request.headers.get('authorization')
   const fromCron = authHeader === `Bearer ${process.env.CRON_SECRET}`
 
+  let ctx: AuthContext | null = null
   if (!fromCron) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    ctx = await getAuthContext()
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (ctx.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const service = await createServiceClient()
 
   const { data: idea } = await service
     .from('content_ideas')
-    .select('*, clients!inner(id, business_name, daily_generation_config)')
+    .select('*, clients!inner(id, business_name, daily_generation_config, organization_id)')
     .eq('id', id)
     .single()
 
   if (!idea) return NextResponse.json({ error: 'Idea not found' }, { status: 404 })
+
+  // Rama de sesión admin: el service client bypasea RLS, así que la idea debe
+  // pertenecer a la org del admin. La rama CRON_SECRET es org-agnóstica.
+  if (ctx) {
+    const ideaOrg = (idea.clients as unknown as { organization_id: string | null })?.organization_id
+    if (orgMismatch(ctx, ideaOrg)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
   if (idea.status === 'in_production' || idea.status === 'published') {
     return NextResponse.json({ ok: true, skipped: 'already past production' })
   }

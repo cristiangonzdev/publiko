@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireClientAccess(id, { adminOnly: true })
+  if (!auth.ok) return auth.response
 
   const { idea_id, concept, angle, content_type } = await request.json() as {
     idea_id: string

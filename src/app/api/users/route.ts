@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/guards'
 
 function randomPassword() {
   return 'Pub' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 5) + '!'
 }
 
-async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  return profile?.role === 'admin'
-}
-
 export async function POST(request: NextRequest) {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
+  if (!auth.ctx.organizationId) {
+    return NextResponse.json({ error: 'Tu usuario no tiene organización asignada' }, { status: 409 })
+  }
+
   const supabase = await createServiceClient()
   const { full_name, email, role } = await request.json() as {
     full_name: string; email: string; role: string
@@ -37,8 +35,9 @@ export async function POST(request: NextRequest) {
 
   const { error: profileError } = await supabase
     .from('profiles')
+    // El nuevo usuario hereda la organización del admin que lo crea.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .insert({ id: data.user.id, full_name, email, role: role as any })
+    .insert({ id: data.user.id, full_name, email, role: role as any, organization_id: auth.ctx.organizationId })
 
   if (profileError) {
     await supabase.auth.admin.deleteUser(data.user.id)
@@ -49,11 +48,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.response
+
   const supabase = await createServiceClient()
   const { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, email, role, is_active, created_at')
+    .eq('organization_id', auth.ctx.organizationId ?? '00000000-0000-0000-0000-000000000000')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

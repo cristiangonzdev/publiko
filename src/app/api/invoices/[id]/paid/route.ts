@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireInvoiceAccess } from '@/lib/auth/guards'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
+  const { id } = await params
+  const auth = await requireInvoiceAccess(id)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const supabase = await createClient()
 
   const { error } = await supabase

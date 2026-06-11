@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { orgMismatch, requireAdmin, type AuthContext } from '@/lib/auth/guards'
 import type { UserRole } from '@/types/supabase'
 
 const VALID_ROLES: UserRole[] = ['admin', 'editor', 'grabador', 'cliente']
+
+/** El profile objetivo debe pertenecer a la org del admin que opera. */
+async function targetInCallerOrg(ctx: AuthContext, profileId: string): Promise<boolean> {
+  const supabase = await createServiceClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', profileId)
+    .single()
+  return Boolean(data) && !orgMismatch(ctx, data!.organization_id)
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.response
 
   const { id } = await params
+  if (!await targetInCallerOrg(auth.ctx, id)) {
+    return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
+  }
   const body = await request.json() as Record<string, unknown>
 
   // Whitelist: never accept arbitrary fields (id, email, etc. via mass-assignment)
@@ -38,6 +52,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!auth.ok) return auth.response
 
   const { id } = await params
+  if (!await targetInCallerOrg(auth.ctx, id)) {
+    return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
+  }
   const supabase = await createServiceClient()
 
   const { error } = await supabase

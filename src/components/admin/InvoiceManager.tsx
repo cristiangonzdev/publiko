@@ -1,33 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { invoiceStatusStyle } from '@/lib/status'
-
-interface Invoice {
-  id: string
-  client_id: string
-  business_name: string
-  invoice_number: string
-  amount: number
-  invoice_type: string
-  status: string
-  due_date: string | null
-  paid_at: string | null
-  created_at: string
-}
-
-interface ActiveClient {
-  id: string
-  business_name: string
-  monthly_fee: number
-  billing_day: number
-  contact_email: string | null
-}
+import type { AgencyInfo, BillableClient, InvoiceRow } from '@/components/invoices/types'
+import { InvoiceForm } from '@/components/invoices/InvoiceForm'
+import { InvoiceDetail } from '@/components/invoices/InvoiceDetail'
 
 interface Props {
-  initialInvoices: Invoice[]
-  activeClients: ActiveClient[]
+  initialInvoices: InvoiceRow[]
+  activeClients: BillableClient[]
+  agency: AgencyInfo | null
+  logoSrc: string | null
 }
 
 // Títulos de grupo en plural (distintos de la etiqueta singular por factura).
@@ -38,11 +24,13 @@ const GROUP_LABEL: Record<string, string> = {
   paid: 'Pagadas',
 }
 
-export function InvoiceManager({ initialInvoices, activeClients }: Props) {
+export function InvoiceManager({ initialInvoices, activeClients, agency, logoSrc }: Props) {
+  const router = useRouter()
   const [invoices, setInvoices] = useState(initialInvoices)
-  const [showGenerate, setShowGenerate] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const generateMonthly = async () => {
     setGenerating(true)
@@ -71,23 +59,44 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
     }
   }
 
-  const grouped = invoices.reduce<Record<string, Invoice[]>>((acc, inv) => {
+  const openNewInvoice = () => {
+    // Sin datos de agencia no se puede facturar: la cabecera del PDF los necesita.
+    if (!agency) {
+      toast.error('Configura primero los datos de la agencia para poder facturar')
+      router.push('/admin/settings/agency')
+      return
+    }
+    setShowForm(true)
+  }
+
+  const applyPatch = (patch: Partial<InvoiceRow> & { id: string }) =>
+    setInvoices((prev) => prev.map((i) => (i.id === patch.id ? { ...i, ...patch } : i)))
+
+  const grouped = invoices.reduce<Record<string, InvoiceRow[]>>((acc, inv) => {
     const key = inv.status
     acc[key] = [...(acc[key] ?? []), inv]
     return acc
   }, {})
 
+  const selected = invoices.find((i) => i.id === selectedId) ?? null
+
   return (
     <div className="mt-6">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <button
+          onClick={openNewInvoice}
+          className="rounded-md bg-ink-900 px-4 py-2 text-sm font-medium text-white hover:bg-ink-800"
+        >
+          + Nueva factura
+        </button>
         <button
           onClick={generateMonthly}
           disabled={generating}
-          className="rounded-md bg-ink-900 px-4 py-2 text-sm font-medium text-white hover:bg-ink-800 disabled:opacity-50"
+          className="rounded-md border border-ink-300 bg-white px-4 py-2 text-sm font-medium text-ink-900 hover:bg-ink-50 disabled:opacity-50"
         >
           {generating ? 'Generando…' : '⚡ Generar facturas del mes'}
         </button>
-        <span className="text-xs text-ink-400">Genera una factura por cada cliente activo</span>
+        <span className="text-xs text-ink-400">El botón ⚡ genera una factura por cada cliente activo</span>
       </div>
 
       {['overdue', 'pending', 'sent', 'paid'].map((status) => {
@@ -108,10 +117,17 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-ink-100">
                   {group.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-ink-50">
+                    <tr
+                      key={inv.id}
+                      className="cursor-pointer hover:bg-ink-50"
+                      onClick={() => setSelectedId(inv.id)}
+                    >
                       <td className="px-4 py-3">
                         <p className="font-medium text-ink-900">{inv.business_name}</p>
-                        <p className="text-xs text-ink-400">{inv.invoice_number} · {inv.invoice_type}</p>
+                        <p className="text-xs text-ink-400">
+                          {inv.invoice_number} · {inv.invoice_type}
+                          {inv.pdf_url && <span title="PDF generado"> · 📄</span>}
+                        </p>
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-ink-900">
                         {inv.amount.toLocaleString('es-ES')} €
@@ -119,7 +135,7 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
                       <td className="px-4 py-3 text-right text-xs text-ink-500">
                         {inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-ES') : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         {(status === 'pending' || status === 'sent' || status === 'overdue') && (
                           <button
                             onClick={() => markPaid(inv.id)}
@@ -143,6 +159,27 @@ export function InvoiceManager({ initialInvoices, activeClients }: Props) {
           </div>
         )
       })}
+
+      {showForm && agency && (
+        <InvoiceForm
+          clients={activeClients}
+          agency={agency}
+          logoSrc={logoSrc}
+          onClose={() => setShowForm(false)}
+          onCreated={(invoice) => setInvoices((prev) => [invoice, ...prev])}
+        />
+      )}
+
+      {selected && (
+        <InvoiceDetail
+          invoice={selected}
+          client={activeClients.find((c) => c.id === selected.client_id) ?? null}
+          agency={agency}
+          logoSrc={logoSrc}
+          onClose={() => setSelectedId(null)}
+          onUpdated={applyPatch}
+        />
+      )}
     </div>
   )
 }

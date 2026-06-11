@@ -10,6 +10,15 @@ export type Platform = 'instagram' | 'facebook' | 'tiktok' | 'gmb' | 'youtube_sh
 
 type R = never[]
 
+/** Línea de factura almacenada en invoices.lines (jsonb). Importes en euros. */
+export interface InvoiceLine {
+  description: string
+  quantity: number
+  unit_price: number
+  tax_rate: number
+  subtotal: number
+}
+
 export interface PostToPublish {
   post_id: string
   client_id: string
@@ -28,15 +37,21 @@ export interface PostToPublish {
 export interface Database {
   public: {
     Tables: {
+      organizations: {
+        Row: { id: string; name: string; slug: string; plan: string; settings: Json; created_at: string }
+        Insert: { id?: string; name: string; slug: string; plan?: string; settings?: Json; created_at?: string }
+        Update: Partial<Database['public']['Tables']['organizations']['Insert']>
+        Relationships: R
+      }
       profiles: {
-        Row: { id: string; role: UserRole; full_name: string; email: string; phone: string | null; telegram_chat_id: string | null; avatar_url: string | null; is_active: boolean; created_at: string; updated_at: string }
-        Insert: { id: string; role?: UserRole; full_name: string; email: string; phone?: string | null; telegram_chat_id?: string | null; avatar_url?: string | null; is_active?: boolean; created_at?: string; updated_at?: string }
+        Row: { id: string; role: UserRole; full_name: string; email: string; phone: string | null; telegram_chat_id: string | null; avatar_url: string | null; organization_id: string; is_owner: boolean; is_active: boolean; created_at: string; updated_at: string }
+        Insert: { id: string; role?: UserRole; full_name: string; email: string; phone?: string | null; telegram_chat_id?: string | null; avatar_url?: string | null; organization_id?: string; is_owner?: boolean; is_active?: boolean; created_at?: string; updated_at?: string }
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>
         Relationships: R
       }
       clients: {
-        Row: { id: string; business_name: string; slug: string; status: ClientStatus; contact_name: string; contact_email: string | null; contact_phone: string | null; contact_whatsapp: string | null; monthly_fee: number; setup_fee: number; contract_start: string | null; contract_end: string | null; billing_day: number | null; payment_method: string | null; meta_business_id: string | null; meta_system_user_token: string | null; facebook_page_id: string | null; drive_folder_id: string | null; gmb_account_id: string | null; gmb_location_id: string | null; geo_tracking_enabled: boolean | null; geo_location: string | null; client_user_id: string | null; assigned_editor_id: string | null; assigned_grabador_id: string | null; pipeline_stage: string | null; pipeline_notes: string | null; lost_reason: string | null; current_followers: Json; daily_generation_config: Json; is_active: boolean; created_at: string; updated_at: string; deleted_at: string | null }
-        Insert: { id?: string; business_name: string; slug: string; status?: ClientStatus; contact_name: string; contact_email?: string | null; contact_phone?: string | null; contact_whatsapp?: string | null; monthly_fee?: number; setup_fee?: number; contract_start?: string | null; contract_end?: string | null; billing_day?: number | null; payment_method?: string | null; meta_business_id?: string | null; meta_system_user_token?: string | null; facebook_page_id?: string | null; drive_folder_id?: string | null; gmb_account_id?: string | null; gmb_location_id?: string | null; geo_tracking_enabled?: boolean | null; geo_location?: string | null; client_user_id?: string | null; assigned_editor_id?: string | null; assigned_grabador_id?: string | null; pipeline_stage?: string | null; pipeline_notes?: string | null; lost_reason?: string | null; current_followers?: Json; daily_generation_config?: Json; is_active?: boolean; created_at?: string; updated_at?: string; deleted_at?: string | null }
+        Row: { id: string; business_name: string; slug: string; status: ClientStatus; contact_name: string; contact_email: string | null; contact_phone: string | null; contact_whatsapp: string | null; fiscal_name: string | null; nif: string | null; fiscal_address: string | null; fiscal_city: string | null; fiscal_postal_code: string | null; fiscal_country: string; billing_email: string | null; monthly_fee: number; setup_fee: number; contract_start: string | null; contract_end: string | null; billing_day: number | null; payment_method: string | null; meta_business_id: string | null; meta_system_user_token: string | null; facebook_page_id: string | null; drive_folder_id: string | null; gmb_account_id: string | null; gmb_location_id: string | null; geo_tracking_enabled: boolean | null; geo_location: string | null; client_user_id: string | null; assigned_editor_id: string | null; assigned_grabador_id: string | null; pipeline_stage: string | null; pipeline_notes: string | null; lost_reason: string | null; current_followers: Json; daily_generation_config: Json; organization_id: string; is_active: boolean; created_at: string; updated_at: string; deleted_at: string | null }
+        Insert: { id?: string; business_name: string; slug: string; organization_id?: string; status?: ClientStatus; contact_name: string; contact_email?: string | null; contact_phone?: string | null; contact_whatsapp?: string | null; fiscal_name?: string | null; nif?: string | null; fiscal_address?: string | null; fiscal_city?: string | null; fiscal_postal_code?: string | null; fiscal_country?: string; billing_email?: string | null; monthly_fee?: number; setup_fee?: number; contract_start?: string | null; contract_end?: string | null; billing_day?: number | null; payment_method?: string | null; meta_business_id?: string | null; meta_system_user_token?: string | null; facebook_page_id?: string | null; drive_folder_id?: string | null; gmb_account_id?: string | null; gmb_location_id?: string | null; geo_tracking_enabled?: boolean | null; geo_location?: string | null; client_user_id?: string | null; assigned_editor_id?: string | null; assigned_grabador_id?: string | null; pipeline_stage?: string | null; pipeline_notes?: string | null; lost_reason?: string | null; current_followers?: Json; daily_generation_config?: Json; is_active?: boolean; created_at?: string; updated_at?: string; deleted_at?: string | null }
         Update: Partial<Database['public']['Tables']['clients']['Insert']>
         Relationships: R
       }
@@ -89,8 +104,8 @@ export interface Database {
         Relationships: R
       }
       invoices: {
-        Row: { id: string; client_id: string; invoice_number: string; amount: number; invoice_type: string; description: string | null; period_start: string | null; period_end: string | null; status: string; due_date: string | null; paid_at: string | null; payment_method: string | null; pdf_url: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; client_id: string; invoice_number: string; amount: number; invoice_type: string; description?: string | null; period_start?: string | null; period_end?: string | null; status?: string; due_date?: string | null; paid_at?: string | null; payment_method?: string | null; pdf_url?: string | null; created_at?: string; updated_at?: string }
+        Row: { id: string; client_id: string; invoice_number: string; amount: number; invoice_type: string; description: string | null; period_start: string | null; period_end: string | null; status: string; due_date: string | null; paid_at: string | null; payment_method: string | null; pdf_url: string | null; lines: Json; subtotal: number | null; tax_amount: number | null; irpf_amount: number | null; notes: string | null; sent_at: string | null; created_by: string | null; organization_id: string; created_at: string; updated_at: string }
+        Insert: { id?: string; client_id: string; invoice_number: string; amount: number; invoice_type: string; description?: string | null; period_start?: string | null; period_end?: string | null; status?: string; due_date?: string | null; paid_at?: string | null; payment_method?: string | null; pdf_url?: string | null; lines?: Json; subtotal?: number | null; tax_amount?: number | null; irpf_amount?: number | null; notes?: string | null; sent_at?: string | null; created_by?: string | null; organization_id?: string; created_at?: string; updated_at?: string }
         Update: Partial<Database['public']['Tables']['invoices']['Insert']>
         Relationships: R
       }
@@ -118,6 +133,12 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['ai_visibility_snapshots']['Insert']>
         Relationships: R
       }
+      agency_settings: {
+        Row: { id: string; agency_name: string; nif: string; address: string | null; city: string | null; postal_code: string | null; country: string; email: string | null; phone: string | null; logo_url: string | null; iban: string | null; payment_terms_days: number; invoice_prefix: string; next_invoice_number: number; igic_rate: number; irpf_rate: number; organization_id: string; created_at: string; updated_at: string }
+        Insert: { id?: string; agency_name: string; nif: string; address?: string | null; city?: string | null; postal_code?: string | null; country?: string; email?: string | null; phone?: string | null; logo_url?: string | null; iban?: string | null; payment_terms_days?: number; invoice_prefix?: string; next_invoice_number?: number; igic_rate?: number; irpf_rate?: number; organization_id?: string; created_at?: string; updated_at?: string }
+        Update: Partial<Database['public']['Tables']['agency_settings']['Insert']>
+        Relationships: R
+      }
       brand_brain_revisions: {
         Row: { id: string; client_id: string; section: string; proposed_changes: Json; reasoning: string; status: 'pending' | 'approved' | 'rejected'; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }
         Insert: { id?: string; client_id: string; section: string; proposed_changes: Json; reasoning: string; status?: 'pending' | 'approved' | 'rejected'; reviewed_by?: string | null; reviewed_at?: string | null; created_at?: string; updated_at?: string }
@@ -135,6 +156,8 @@ export interface Database {
       append_bruto_asset: { Args: { p_task_id: string; p_asset_id: string }; Returns: undefined }
       get_winning_patterns_for_prompt: { Args: { p_client_id: string; p_limit?: number }; Returns: Json }
       current_user_role: { Args: Record<string, never>; Returns: UserRole }
+      get_my_org_id: { Args: Record<string, never>; Returns: string }
+      next_invoice_number: { Args: { p_org?: string | null }; Returns: string }
     }
     Enums: {
       user_role: UserRole; client_status: ClientStatus; content_status: ContentStatus; content_type: ContentType; content_origin: ContentOrigin; idea_angle: IdeaAngle; platform: Platform

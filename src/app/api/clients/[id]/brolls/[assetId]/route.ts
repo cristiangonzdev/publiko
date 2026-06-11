@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 
 export const runtime = 'nodejs'
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; assetId: string }> }) {
   const { id, assetId } = await params
-  const auth = await requireAdmin()
+  const auth = await requireClientAccess(id, { adminOnly: true })
   if (!auth.ok) return auth.response
 
   const service = await createServiceClient()

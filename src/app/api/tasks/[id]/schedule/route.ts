@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireTaskAccess } from '@/lib/auth/guards'
 import { schedulePostsForTask } from '@/lib/posts/schedule'
 
 export const runtime = 'nodejs'
@@ -11,10 +11,9 @@ export const dynamic = 'force-dynamic'
  * (una por plataforma). A partir de aquí el cron publish-retry las publica.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireTaskAccess(id, { roles: [] })
+  if (!auth.ok) return auth.response
   const { publish_at } = await request.json() as { publish_at?: string }
   if (!publish_at) return NextResponse.json({ error: 'publish_at requerido' }, { status: 400 })
 

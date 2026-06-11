@@ -64,6 +64,8 @@ interface SendArgs {
   to: string
   subject: string
   template: BaseTemplate
+  /** Adjuntos (content en base64). */
+  attachments?: { filename: string; content: string }[]
 }
 
 export async function sendClientEmail(args: SendArgs): Promise<{ id?: string; error?: string }> {
@@ -77,6 +79,7 @@ export async function sendClientEmail(args: SendArgs): Promise<{ id?: string; er
       to: args.to,
       subject: args.subject,
       html: renderEmail(args.template),
+      ...(args.attachments?.length ? { attachments: args.attachments } : {}),
     })
     return { id: result.data?.id }
   } catch (err) {

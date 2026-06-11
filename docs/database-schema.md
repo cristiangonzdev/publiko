@@ -608,3 +608,111 @@ $$ language sql security definer;
 ```
 
 El `drive_folder_id` en `clients` apunta a `/{client_slug}/`. El sistema crea esta estructura automáticamente durante el onboarding.
+
+---
+
+## Facturación y multi-agencia (migrations 0015–0019)
+
+El SQL de arriba refleja el schema base de 0001. Las migrations 0015–0019 añaden lo siguiente (el SQL completo está en `supabase/migrations/`).
+
+### ORGANIZATIONS (multi-agencia) — 0018
+
+```sql
+create table organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text unique not null,
+  plan text not null default 'agency',
+  settings jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+-- Seed determinista: 'a0000000-0000-4000-8000-000000000001' = Logika Digital.
+-- Todos los datos pre-existentes quedaron backfilleados a esta org.
+```
+
+Columnas añadidas (NOT NULL, con DEFAULT transicional a la org seed):
+- `profiles.organization_id` → organizations + `profiles.is_owner boolean default false`
+- `clients.organization_id` → organizations
+- `invoices.organization_id` → organizations (UNIQUE pasa de `invoice_number` global a `(organization_id, invoice_number)`)
+- `agency_settings.organization_id` → organizations (+ `UNIQUE(organization_id)`: una fila por org)
+
+Las demás tablas heredan la organización vía join a `clients` — no llevan `organization_id` propio.
+
+### AGENCY_SETTINGS (datos fiscales de la agencia) — 0015
+
+```sql
+create table agency_settings (
+  id uuid primary key default gen_random_uuid(),
+  agency_name text not null,
+  nif text not null,
+  address text, city text, postal_code text, country text not null default 'ES',
+  email text, phone text, logo_url text,
+  iban text,
+  payment_terms_days integer not null default 30,
+  invoice_prefix text not null default 'INV',
+  next_invoice_number integer not null default 1,
+  igic_rate numeric(5,2) not null default 7.00,
+  irpf_rate numeric(5,2) not null default 15.00,
+  organization_id uuid not null references organizations(id),  -- 0018
+  created_at timestamptz, updated_at timestamptz
+);
+```
+
+### Columnas nuevas en CLIENTS (fiscales) — 0016
+
+`fiscal_name`, `nif`, `fiscal_address`, `fiscal_city`, `fiscal_postal_code`, `fiscal_country default 'ES'`, `billing_email` (todas text, nullables).
+
+### Columnas nuevas en INVOICES (líneas y desglose) — 0016
+
+```sql
+lines jsonb not null default '[]',  -- [{ description, quantity, unit_price, tax_rate, subtotal }]
+subtotal numeric(10,2),
+tax_amount numeric(10,2),           -- IGIC
+irpf_amount numeric(10,2),
+notes text,
+sent_at timestamptz,
+created_by uuid references profiles(id) on delete set null
+-- amount (integer) se mantiene = round(subtotal + tax_amount - irpf_amount)
+-- pdf_url guarda el PATH del bucket privado 'invoices', nunca una URL.
+```
+
+### RLS multi-org — 0019
+
+Patrón de las policies de admin (las policies por rol no cambiaron):
+
+```sql
+-- Tablas con organization_id directo:
+create policy "Clients: org admin full" on clients
+  for all using (current_user_role() = 'admin' and organization_id = get_my_org_id())
+  with check (current_user_role() = 'admin' and organization_id = get_my_org_id());
+
+-- Tablas hijas (vía join a clients):
+create policy "Tasks: org admin full" on content_tasks
+  for all using (
+    current_user_role() = 'admin'
+    and exists (select 1 from clients c
+                where c.id = content_tasks.client_id
+                  and c.organization_id = get_my_org_id())
+  ) with check ( /* misma expresión */ );
+
+-- notifications: select solo user_id = auth.uid() (sin OR admin)
+-- organizations: select para miembros (id = get_my_org_id()), update solo admin de su org
+```
+
+### Funciones nuevas / actualizadas
+
+```sql
+-- Org del usuario autenticado (SECURITY DEFINER, sin recursión — mismo patrón que current_user_role)
+get_my_org_id() returns uuid
+
+-- Numeración atómica por org: UPDATE ... RETURNING con row lock.
+-- admin → deriva su org; service_role → exige p_org. Formato {prefix}-{YYYY}-{NNNN}.
+next_invoice_number(p_org uuid default null) returns text
+
+-- Org-aware para admin, globales para service_role (crons):
+get_mrr_total() / get_upcoming_renewals(days_ahead)
+```
+
+### Storage
+
+Bucket `invoices` (0017): privado, 10 MB, sin policies para authenticated — upload server-side con service client y lectura solo vía signed URLs (igual que `assets` tras 0014).

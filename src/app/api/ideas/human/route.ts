@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { buildSystemPrompt } from '@/lib/claude'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireClientAccess } from '@/lib/auth/guards'
 
 const ai = new Anthropic()
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { client_id, human_input, content_type } = await request.json() as {
     client_id: string
     human_input: string
     content_type: 'reel' | 'post' | 'story' | 'carrusel'
   }
+  if (!client_id) return NextResponse.json({ error: 'client_id required' }, { status: 400 })
+
+  const auth = await requireClientAccess(client_id, { adminOnly: true })
+  if (!auth.ok) return auth.response
 
   const service = await createServiceClient()
 

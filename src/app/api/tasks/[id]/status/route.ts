@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/guards'
+import { requireTaskAccess } from '@/lib/auth/guards'
 
 /**
  * Transiciones de estado permitidas (from -> [to válidos]) según el lifecycle
@@ -24,10 +24,9 @@ const ALLOWED: Record<string, string[]> = {
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin()
-  if (!auth.ok) return auth.response
-
   const { id } = await params
+  const auth = await requireTaskAccess(id, { roles: [] })
+  if (!auth.ok) return auth.response
 
   const body = await request.json() as { status: string; publish_at?: string }
   if (!body.status) return NextResponse.json({ error: 'status required' }, { status: 400 })

@@ -5,7 +5,7 @@ import { getAuthContext } from '@/lib/auth/guards'
 async function createClient(formData: FormData) {
   'use server'
   const ctx = await getAuthContext()
-  if (!ctx || ctx.role !== 'admin') throw new Error('No autorizado')
+  if (!ctx || ctx.role !== 'admin' || !ctx.organizationId) throw new Error('No autorizado')
   const supabase = await createServiceClient()
 
   const businessName = formData.get('business_name') as string
@@ -14,6 +14,7 @@ async function createClient(formData: FormData) {
   const contactEmail = formData.get('contact_email') as string
   const contactPhone = formData.get('contact_phone') as string
   const monthlyFee = parseInt(formData.get('monthly_fee') as string) || 0
+  const optional = (key: string) => ((formData.get(key) as string | null)?.trim() || null)
 
   const { data, error } = await supabase
     .from('clients')
@@ -24,6 +25,10 @@ async function createClient(formData: FormData) {
       contact_email: contactEmail,
       contact_phone: contactPhone,
       monthly_fee: monthlyFee,
+      fiscal_name: optional('fiscal_name'),
+      nif: optional('nif'),
+      billing_email: optional('billing_email'),
+      organization_id: ctx.organizationId,
       status: 'lead',
     })
     .select('id')
@@ -64,6 +69,9 @@ export default async function NewClientPage({ searchParams }: Props) {
           { name: 'contact_email', label: 'Email de contacto', type: 'email', required: false },
           { name: 'contact_phone', label: 'Teléfono', type: 'tel', required: false },
           { name: 'monthly_fee', label: 'Cuota mensual (€)', type: 'number', required: false },
+          { name: 'fiscal_name', label: 'Razón social (para facturas)', type: 'text', required: false },
+          { name: 'nif', label: 'NIF (para facturas)', type: 'text', required: false },
+          { name: 'billing_email', label: 'Email de facturación', type: 'email', required: false },
         ].map((field) => (
           <div key={field.name}>
             <label className="block text-sm font-medium text-ink-700">{field.label}</label>
