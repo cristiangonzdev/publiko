@@ -1,31 +1,19 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { useDebounce } from '@/lib/hooks/useDebounce'
-import { useFormState } from '../useFormState'
 import { TextInput, TextArea, SelectField, TagsInput, FieldRow } from '../FormFields'
+import type { StepProps } from './Step1Identity'
 
-interface Props {
-  clientId: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialData?: Record<string, any>
-  onSave: (section: string, data: Record<string, unknown>) => Promise<void>
-}
+const ENERGY_OPTIONS = [
+  { value: 'calm', label: 'Calmada' },
+  { value: 'moderate', label: 'Moderada' },
+  { value: 'energetic', label: 'Enérgica' },
+]
 
-export function Step5Visual({ initialData, onSave }: Props) {
-  const [state, update] = useFormState(initialData?.visual_identity ?? {})
-  const debouncedState = useDebounce(state, 1500)
-  const isFirst = useRef(true)
-
-  useEffect(() => {
-    if (isFirst.current) { isFirst.current = false; return }
-    onSave('visual_identity', debouncedState)
-  }, [debouncedState, onSave])
-
-  const colors = (state.colors as Record<string, unknown>) ?? {}
-  const photo = (state.photo_style as Record<string, unknown>) ?? {}
-  const music = (state.music_style as Record<string, unknown>) ?? {}
-  const camera = (state.on_camera as Record<string, unknown>) ?? {}
+export function Step5Visual({ data, update }: StepProps) {
+  const colors = (data.colors as Record<string, unknown>) ?? {}
+  const photo = (data.photo_style as Record<string, unknown>) ?? {}
+  const music = (data.music_style as Record<string, unknown>) ?? {}
+  const camera = (data.on_camera as Record<string, unknown>) ?? {}
 
   return (
     <div className="space-y-5">
@@ -71,7 +59,7 @@ export function Step5Visual({ initialData, onSave }: Props) {
 
       <h3 className="text-sm font-semibold text-ink-700 pt-2">Música para vídeos</h3>
       <FieldRow>
-        <SelectField label="Energía" value={music.energy as string ?? 'calm'} options={['calm','moderate','energetic']} onChange={(v) => update('music_style', { ...music, energy: v })} />
+        <SelectField label="Energía" value={music.energy as string ?? 'calm'} options={ENERGY_OPTIONS} onChange={(v) => update('music_style', { ...music, energy: v })} />
         <TagsInput label="Estilos preferidos" placeholder="Jazz, Lo-fi, Acústico…" value={music.preferred as string[] ?? []} onChange={(v) => update('music_style', { ...music, preferred: v })} />
       </FieldRow>
 

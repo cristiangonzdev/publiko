@@ -50,13 +50,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     )
   }
 
-  const updates: Record<string, string> = {
+  const updates: Record<string, string | null> = {
     status: body.status,
     updated_at: new Date().toISOString(),
   }
   if (body.status === 'editing') updates.editing_started_at = new Date().toISOString()
   if (body.status === 'approved') updates.approved_at = new Date().toISOString()
   if (body.publish_at) updates.publish_at = body.publish_at
+  // Al volver a revisión la fecha de publicación deja de ser válida: se limpia
+  // para que una re-aprobación no programe el post con una fecha obsoleta.
+  if (body.status === 'revision') updates.publish_at = null
 
   const { error } = await supabase
     .from('content_tasks')

@@ -23,13 +23,15 @@ interface Props {
   deadline: string | null
   recordingBrief: RecordingBrief | null
   driveFolderId: string | null
+  initialBrutoCount?: number
 }
 
-export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, recordingBrief }: Props) {
+export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, recordingBrief, initialBrutoCount = 0 }: Props) {
   const [currentStatus, setCurrentStatus] = useState(status)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
+  const [brutoCount, setBrutoCount] = useState(initialBrutoCount)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,6 +48,7 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
         file,
       })
       setCurrentStatus('brutos_ready')
+      setBrutoCount((c) => c + 1)
       setUploadProgress(null)
     } catch (err) {
       alert(`Error subiendo: ${err instanceof Error ? err.message : String(err)}`)
@@ -127,7 +130,7 @@ export function GrabadorTaskCard({ taskId, title, clientName, status, deadline, 
         {currentStatus === 'brutos_ready' && (
           <div className="mt-3 space-y-2">
             <div className="rounded-md bg-green-50 py-2 text-center text-sm font-medium text-green-700">
-              ✓ Brutos enviados al editor
+              ✓ {brutoCount > 0 ? `${brutoCount} bruto${brutoCount > 1 ? 's' : ''} enviado${brutoCount > 1 ? 's' : ''} al editor` : 'Brutos enviados al editor'}
             </div>
             <button
               onClick={() => fileRef.current?.click()}

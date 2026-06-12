@@ -10,7 +10,7 @@ export default async function GrabadorPage() {
 
   const { data: tasks } = await supabase
     .from('content_tasks')
-    .select('id, title, status, deadline, recording_brief, client_id')
+    .select('id, title, status, deadline, recording_brief, client_id, bruto_asset_ids')
     .eq('grabador_id', user.id)
     .not('status', 'in', '("published","delivered","approved","scheduled")')
     .order('deadline', { ascending: true })
@@ -58,6 +58,7 @@ export default async function GrabadorPage() {
                 deadline={task.deadline}
                 recordingBrief={task.recording_brief as Record<string, unknown> | null}
                 driveFolderId={folderMap[task.client_id] ?? null}
+                initialBrutoCount={(task.bruto_asset_ids as string[] | null)?.length ?? 0}
               />
             ))}
           </div>

@@ -80,25 +80,47 @@ function WorkloadCard({ name, tasks, role }: { name: string; tasks: Task[]; role
   )
 }
 
+const STATUS_FILTERS: { key: string; label: string; statuses: string[] | null }[] = [
+  { key: 'all', label: 'Todas', statuses: null },
+  { key: 'pre', label: 'Por arrancar', statuses: ['idea', 'suggested', 'approved_idea', 'brief_sent'] },
+  { key: 'recording', label: 'Grabación', statuses: ['recording', 'brutos_ready'] },
+  { key: 'editing', label: 'Edición', statuses: ['editing', 'revision'] },
+  { key: 'review', label: 'Por aprobar', statuses: ['delivered'] },
+  { key: 'publish', label: 'Publicación', statuses: ['approved', 'scheduled', 'failed'] },
+]
+
 export function TasksManager({ initialTasks, grabadores, editores }: Props) {
   const [tasks, setTasks] = useState(initialTasks)
   const [loading, setLoading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [edits, setEdits] = useState<Record<string, Partial<Task>>>({})
+  const [statusFilter, setStatusFilter] = useState('all')
+
+  const activeFilter = STATUS_FILTERS.find((f) => f.key === statusFilter) ?? STATUS_FILTERS[0]
+  const visibleTasks = activeFilter.statuses
+    ? tasks.filter((t) => activeFilter.statuses!.includes(t.status))
+    : tasks
 
   const save = async (taskId: string) => {
     const changes = edits[taskId]
     if (!changes) return
     setLoading(taskId)
     try {
-      await fetch(`/api/tasks/${taskId}/assign`, {
+      const res = await fetch(`/api/tasks/${taskId}/assign`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(changes),
       })
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `Error ${res.status}` }))
+        alert(error ?? 'No se pudo guardar la asignación')
+        return // conserva los edits para reintentar
+      }
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, ...changes } : t))
       setEdits((prev) => { const n = { ...prev }; delete n[taskId]; return n })
       setExpanded(null)
+    } catch {
+      alert('Sin conexión: no se pudo guardar')
     } finally {
       setLoading(null)
     }
@@ -140,6 +162,27 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
         </div>
       )}
 
+      {/* Filtro por fase del pipeline */}
+      <div className="flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => {
+          const count = f.statuses ? tasks.filter((t) => f.statuses!.includes(t.status)).length : tasks.length
+          return (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                statusFilter === f.key
+                  ? 'bg-ink-900 text-white'
+                  : 'border border-ink-200 text-ink-500 hover:border-ink-400'
+              )}
+            >
+              {f.label} <span className={statusFilter === f.key ? 'text-ink-300' : 'text-ink-400'}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
         <table className="min-w-[750px] w-full text-sm">
           <thead className="border-b border-ink-200 bg-ink-50">
@@ -152,14 +195,14 @@ export function TasksManager({ initialTasks, grabadores, editores }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
-            {!tasks.length && (
+            {!visibleTasks.length && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-sm text-ink-400">
-                  Sin tareas activas.
+                  {statusFilter === 'all' ? 'Sin tareas activas.' : 'Sin tareas en esta fase.'}
                 </td>
               </tr>
             )}
-            {tasks.map((task) => {
+            {visibleTasks.map((task) => {
               const isExpanded = expanded === task.id
               const edit = edits[task.id] ?? {}
               return (

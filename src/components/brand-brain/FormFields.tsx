@@ -41,13 +41,19 @@ export function TextArea({ label, value, onChange, placeholder, rows = 3 }: {
 }
 
 export function SelectField({ label, value, options, onChange }: {
-  label: string; value: string; options: string[]; onChange: (v: string) => void
+  label: string
+  value: string
+  options: Array<string | { value: string; label: string }>
+  onChange: (v: string) => void
 }) {
   return (
     <div>
       <label className="block text-sm font-medium text-ink-700">{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)} className={base}>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {options.map((o) => {
+          const opt = typeof o === 'string' ? { value: o, label: o } : o
+          return <option key={opt.value} value={opt.value}>{opt.label}</option>
+        })}
       </select>
     </div>
   )

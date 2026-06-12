@@ -53,10 +53,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (asset?.id) {
     await service.rpc('append_bruto_asset', { p_task_id: id, p_asset_id: asset.id })
   }
+  // Solo avanza a brutos_ready desde fases de grabación: si la tarea ya está
+  // en edición/entregada, añadir otro bruto no debe regresar su estado.
   await service
     .from('content_tasks')
     .update({ status: 'brutos_ready', updated_at: new Date().toISOString() })
     .eq('id', id)
+    .in('status', ['brief_sent', 'recording', 'brutos_ready'])
 
   const businessName = (task.clients as unknown as { business_name: string })?.business_name ?? ''
 

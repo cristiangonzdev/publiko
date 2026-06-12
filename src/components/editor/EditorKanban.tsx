@@ -67,12 +67,21 @@ export function EditorKanban({ initialTasks }: Props) {
   const uploadingTask = useRef<string | null>(null)
 
   const moveStatus = async (taskId: string, newStatus: string) => {
-    await fetch(`/api/tasks/${taskId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t))
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `Error ${res.status}` }))
+        alert(error ?? 'No se pudo cambiar el estado')
+        return
+      }
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t))
+    } catch {
+      alert('Sin conexión: no se pudo cambiar el estado')
+    }
   }
 
   const loadBrutos = async (taskId: string) => {
@@ -212,7 +221,7 @@ export function EditorKanban({ initialTasks }: Props) {
                             onClick={() => toggleExpand(task.id)}
                             className="text-[10px] text-ink-400 hover:text-ink-600"
                           >
-                            {isExpanded ? 'cerrar' : 'brief'}
+                            {isExpanded ? 'cerrar' : 'brief + archivos'}
                           </button>
                         </div>
                       </div>
