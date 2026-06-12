@@ -22,6 +22,8 @@ const GROUP_LABEL: Record<string, string> = {
   pending: 'Pendientes',
   sent: 'Enviadas',
   paid: 'Pagadas',
+  draft: 'Borradores',
+  cancelled: 'Anuladas',
 }
 
 export function InvoiceManager({ initialInvoices, activeClients, agency, logoSrc }: Props) {
@@ -99,7 +101,7 @@ export function InvoiceManager({ initialInvoices, activeClients, agency, logoSrc
         <span className="text-xs text-ink-400">El botón ⚡ genera una factura por cada cliente activo</span>
       </div>
 
-      {['overdue', 'pending', 'sent', 'paid'].map((status) => {
+      {['overdue', 'pending', 'sent', 'paid', 'draft', 'cancelled'].map((status) => {
         const group = grouped[status] ?? []
         if (!group.length) return null
         return (

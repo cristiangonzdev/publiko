@@ -89,3 +89,23 @@ drop policy if exists "Notifications: admin full" on notifications;
 --    pipeline kanban sigue cargando (sus policies dependen de
 --    current_user_role()/get_my_org_id(), que 0018/0019 redefinen con
 --    la misma firma — no debería romper nada).
+
+-- ======================= ADDENDUM 2026-06-12 (2) =====================
+-- Drift adicional detectado al generar tipos desde la BD viva con
+-- `supabase gen types typescript --project-id shmgrhddfatmvwjdkhum`
+-- (los valores de enum no son visibles por REST, por eso la auditoría
+-- anterior lo dio por aplicado):
+--
+-- El enum `platform` NO contiene 'youtube_shorts' aunque 0010 está
+-- marcada como aplicada. posts.platform y content_tasks.target_platforms
+-- usan este enum: programar un YouTube Short fallaría con
+-- "invalid input value for enum platform".
+--
+-- Ejecutar SOLO esta sentencia (ALTER TYPE ... ADD VALUE no admite ir en
+-- la misma transacción que sentencias que usen el valor nuevo):
+
+ALTER TYPE platform ADD VALUE IF NOT EXISTS 'youtube_shorts';
+
+-- Verificación (debe devolver 5 filas, incluida youtube_shorts):
+-- select enumlabel from pg_enum
+-- where enumtypid = 'platform'::regtype order by enumsortorder;

@@ -36,6 +36,7 @@ export const CLIENT_STATUS: Record<ClientStatus, StatusStyle> = {
 }
 
 export const INVOICE_STATUS: Record<string, StatusStyle> = {
+  draft: { label: 'Borrador', badge: 'bg-slate-100 text-slate-600' },
   pending: { label: 'Pendiente', badge: 'bg-amber-100 text-amber-800' },
   sent: { label: 'Enviada', badge: 'bg-blue-100 text-blue-700' },
   paid: { label: 'Pagada', badge: 'bg-green-100 text-green-700' },

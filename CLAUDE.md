@@ -306,6 +306,36 @@ RPCs clave: `get_mrr_total()` (org-aware para admin, global para service_role), 
 
 ---
 
+## BD compartida con Labs OS (CRMLOGIKALABS)
+
+El proyecto Supabase (`shmgrhddfatmvwjdkhum`) **lo comparten dos repos**: este y
+`C:\Users\34618\OneDrive\REPOSITORIOS\CRMLOGIKALABS` (Labs OS, CRM interno de Logika).
+Labs OS aplicó las migraciones `0020-0024` continuando la secuencia de este repo.
+
+**Qué cambió Labs en tablas de Publiko (todo aditivo y nullable):**
+- `clients`: + `workspace_id`, `contact_id`
+- `invoices`: + `workspace_id`, `project_id`, `issued_date`; `status` ampliado a
+  `draft | pending | sent | paid | overdue | cancelled` (tipo `InvoiceStatus` en
+  `src/types/supabase.ts`). Todo código que filtre o agrupe facturas debe tolerar
+  el set completo — pueden llegar facturas creadas desde Labs.
+- Labs reutiliza `organizations` y los helpers RLS `current_user_role()` / `get_my_org_id()`.
+
+**Reglas de convivencia (innegociables):**
+1. **Numeración de migraciones única entre ambos repos.** Antes de crear una
+   migración, mirar `supabase/migrations/` de LOS DOS repos y tomar el siguiente
+   número libre (a 2026-06-12 el siguiente es `0025`). Nunca reutilizar un número.
+2. **Tablas compartidas (`organizations`, `clients`, `invoices`) y helpers RLS:**
+   solo cambios aditivos con columnas nullables o con default. Renombrar, borrar
+   columnas, endurecer constraints o cambiar la firma de `current_user_role()` /
+   `get_my_org_id()` exige revisar primero el otro repo.
+3. **Tras cualquier migración, regenerar tipos en ambos repos:**
+   `supabase gen types typescript --project-id shmgrhddfatmvwjdkhum --schema public`.
+4. La numeración fiscal de facturas (`next_invoice_number`) es una serie única
+   compartida — ambos repos escriben en la misma tabla `invoices`.
+
+**Estado de drift conocido:** ver `supabase/RECONCILIACION_2026-06-12.sql`
+(reconciliación aplicada; addendum pendiente: enum `platform` sin `youtube_shorts`).
+
 ## Reglas de seguridad innegociables
 
 Estas reglas nunca se negocian. Si una tarea entra en conflicto con alguna, detente y pregunta.

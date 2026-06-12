@@ -42,7 +42,7 @@ export default async function InvoicesPage() {
   }
 
   const totalPending = (invoices ?? [])
-    .filter((i) => i.status === 'pending' || i.status === 'sent')
+    .filter((i) => i.status === 'pending' || i.status === 'sent' || i.status === 'overdue')
     .reduce((s, i) => s + i.amount, 0)
 
   const totalCollected = (invoices ?? [])
