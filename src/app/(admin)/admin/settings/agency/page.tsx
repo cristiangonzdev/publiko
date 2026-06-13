@@ -24,7 +24,8 @@ async function saveAgencySettings(formData: FormData) {
 
   const logoUrl = text('logo_url')
   // URL pública (https) o path de Storage; cualquier otra cosa se rechaza.
-  if (logoUrl && !/^https:\/\//.test(logoUrl) && !/^[\w\-./]+$/.test(logoUrl)) {
+  // Se prohíbe '..' para evitar path traversal en el path de Storage.
+  if (logoUrl && !/^https:\/\//.test(logoUrl) && (!/^[\w\-./]+$/.test(logoUrl) || logoUrl.includes('..'))) {
     redirect('/admin/settings/agency?error=logo')
   }
 
