@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 
 /**
- * Punto único de registro de errores. Hoy escribe a la consola estructurada
- * (visible en los logs de Vercel). Cuando se configure el DSN de Sentry, basta
- * con enviar aquí `Sentry.captureException` — el resto del código ya llama a
- * logError, no a console.error suelto.
+ * Punto único de registro de errores. Escribe a la consola estructurada
+ * (visible en los logs de Vercel) y reporta a Sentry. Sin DSN configurado,
+ * `Sentry.captureException` no tiene cliente activo y es un no-op seguro.
  */
 export function logError(context: string, error: unknown, extra?: Record<string, unknown>) {
   const message = error instanceof Error ? error.message : String(error)
   const stack = error instanceof Error ? error.stack : undefined
   console.error(`[${context}] ${message}`, { ...extra, stack })
+  Sentry.captureException(error, { tags: { context }, extra })
 }
 
 /**
