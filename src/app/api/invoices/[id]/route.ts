@@ -43,8 +43,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .single()
   if (!invoice) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
-  // Solo se editan borradores: una factura enviada o pagada es inmutable.
-  if (invoice.status !== 'pending' || invoice.sent_at) {
+  // Solo se editan borradores (pending/draft): una factura enviada o pagada es inmutable.
+  if (!['pending', 'draft'].includes(invoice.status ?? '') || invoice.sent_at) {
     return NextResponse.json({ error: 'Solo se pueden editar facturas en borrador (pendientes y no enviadas)' }, { status: 409 })
   }
 

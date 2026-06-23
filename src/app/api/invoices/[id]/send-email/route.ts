@@ -67,8 +67,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .update({
       sent_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      // No retroceder estados posteriores (paid/overdue): solo pending → sent.
-      ...(invoice.status === 'pending' ? { status: 'sent' } : {}),
+      // No retroceder estados posteriores (paid/overdue): draft y pending → sent.
+      ...(['pending', 'draft'].includes(invoice.status ?? '') ? { status: 'sent' } : {}),
     })
     .eq('id', id)
 
