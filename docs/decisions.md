@@ -187,3 +187,60 @@ Dos agencias conocidas (Logika Digital + una segunda) van a usar Publiko con ais
 - La org 2 se crea manualmente (SQL con service role) DESPUÉS de desplegar wave B, junto con su primer admin.
 - Aislamiento verificable con `scripts/test-rls.mjs` (2 orgs de prueba + cleanup, exit 1 si falla).
 - El admin ya no ve notificaciones de otros usuarios (la campana siempre fue por usuario).
+
+---
+
+## ADR-007: Detección de tendencias virales (Virlo) — workspace por org, cap por cliente, gate de concurrencia separado del gate de presupuesto
+
+**Estado:** Propuesto
+**Fecha:** 2026-07-02
+
+### Contexto
+
+Se evalúa integrar Virlo (dev.virlo.ai) como fuente de tendencias TikTok/Reels/Shorts, con una capa de Claude encima que convierte tendencias detectadas en briefs personalizados por Brand Brain. Virlo cobra por workspace/créditos. Publiko es multi-agencia desde ADR-006 (`organizations`), y el modelo de coste tiene que decidir dos cosas independientes: cuántos workspaces de Virlo se contratan (unidad de facturación externa) y cómo se reparte/limita el consumo interno entre clientes de una misma agencia (unidad de control interno). Confundir ambas lleva a dos fallos distintos: (a) un cliente ruidoso deja sin cuota a los demás de su agencia, (b) el cron dispara llamadas en paralelo hacia el mismo workspace y provoca throttling/429 de Virlo para todos los clientes de esa agencia a la vez, aunque cada uno individualmente esté dentro de su presupuesto.
+
+### Decisión
+
+**Unidad de contratación:** 1 workspace de Virlo por `organizations.id` (no por cliente, no global). Credenciales del workspace en una tabla nueva `organization_integrations` (o columna en `agency_settings`, a decidir en la migración) — no en `clients`, porque el workspace es de la agencia, no del negocio final.
+
+**Unidad de control de coste — cap duro mensual por cliente**, independiente de cuántos workspaces existan por debajo:
+
+```sql
+alter table clients add column trend_detection_config jsonb default '{}';
+-- { "enabled": true, "monthly_credit_budget": 200, "keywords": [...], "platforms": [...] }
+
+create table trend_scan_usage (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  month date not null,                          -- primer día del mes
+  credits_used integer not null default 0,
+  scans_count integer not null default 0,
+  budget_exhausted_notified_at timestamptz,      -- dedupe del aviso; null = aún no agotado o no avisado
+  updated_at timestamptz not null default now(),
+  unique(client_id, month)
+);
+```
+
+El cron gatea por `credits_used < monthly_credit_budget * 0.9` (margen del 90%, ver ADR sobre el riesgo de carrera post-respuesta) **antes** de llamar a Virlo, e incrementa `credits_used` **después** de recibir respuesta (nunca antes — evita perder cuota por llamadas fallidas).
+
+**Unidad de concurrencia — gate separado del cap de presupuesto**, porque el ToS de Virlo limita rate/llamadas simultáneas por workspace, no por cliente. El cron agrupa los clientes elegibles por `organization_id` y aplica concurrencia en dos niveles:
+- Orgs en paralelo con `ORG_CONCURRENCY` (workspaces distintos, sin límite compartido entre ellos — mismo valor que `CLIENT_CONCURRENCY=5` de `daily-generation`).
+- Clientes de la **misma** org acotados a `WORKSPACE_CONCURRENCY` (arranca en 2, conservador — a ajustar cuando se conozcan los límites reales publicados por Virlo, hoy desconocidos) vía un segundo `mapLimit` anidado, semáforo en memoria dentro de la misma invocación del cron. No hay lock entre invocaciones distintas (mismo trade-off aceptado que en `daily-generation`/`publish-retry`) — el margen del 90% en el cap de crédito absorbe el solape ocasional, no lo elimina.
+
+**Comportamiento al agotar el cap a mitad de mes** — nunca un salto silencioso:
+1. En el tick que cruza el umbral (`credits_used` pasa de `< budget*0.9` a `>= budget*0.9`), si `budget_exhausted_notified_at is null`: INSERT en `notifications` (channel='in_app', type='trend_budget_exhausted', data={client_id, business_name}) para cada admin de la org, y una llamada `notifyAdmin()` (Telegram) — y se setea `budget_exhausted_notified_at = now()`.
+2. Ticks siguientes del mismo mes: el cliente se salta en el `eligible` filter (mismo patrón que hoy filtra por `daily_generation_config` vacío), sin re-notificar — la señal persistente es la fila en `notifications` (con `read_at`, no desaparece como el scroll de Telegram) y no un log de Vercel.
+3. La ficha del cliente en `/admin/clients/[id]` lee `trend_scan_usage` del mes en curso y muestra un banner ("Presupuesto de tendencias agotado — se reactiva el 1 de [mes]") mientras `credits_used >= budget`. Sin esto, la única forma de enterarse sería releer notificaciones antiguas.
+4. `month` en `trend_scan_usage` resetea el contador de forma natural (fila nueva cada mes, no hay job de reset) — `budget_exhausted_notified_at` también empieza en `null` cada mes, así que el aviso se repite si el cliente vuelve a agotar cuota el mes siguiente.
+
+### Alternativas consideradas
+- **1 workspace por cliente:** aislamiento de coste perfecto pero obliga a gestionar credenciales de Virlo por cada `clients.id` y multiplica el número de contratos — descartado hasta que un cliente concreto lo justifique económicamente.
+- **1 workspace global para todo Publiko:** máxima economía de créditos pero cero aislamiento entre agencias — inadmisible en un sistema multi-tenant donde cada organización es un cliente de pago independiente de la agencia.
+- **Un único gate (solo presupuesto, sin gate de concurrencia):** es lo que se iba a implementar antes de esta revisión. Insuficiente: un cliente dentro de su cap individual puede seguir disparando 429 de Virlo para toda su organización si el cron no acota la concurrencia por workspace.
+- **Notificar en cada tick mientras el cliente esté agotado:** genera ruido (spam de Telegram/in-app cada vez que corre el cron) sin información nueva — se descarta a favor de notificar una vez por ciclo de agotamiento vía `budget_exhausted_notified_at`.
+
+### Consecuencias
+- Migrar un cliente a workspace dedicado más adelante es un cambio de aprovisionamiento (`organization_integrations`), no de schema de `trend_scan_usage` ni del cron — el cap por cliente sigue funcionando igual.
+- `WORKSPACE_CONCURRENCY=2` es una suposición conservadora sin datos reales de rate limit de Virlo; hay que revisarlo en cuanto se contrate el primer workspace real y se conozcan los límites documentados.
+- El margen del 90% en el cap y la ausencia de lock entre invocaciones del cron significan que un pico de solape puede hacer que el gasto real supere ligeramente el `monthly_credit_budget` configurado — aceptado como riesgo residual, no eliminado.
+- Trabajo derivado: migración concreta (`architect`), cron `trend-scan` + gate de concurrencia/presupuesto (`backend-dev`/`integrations`), banner en ficha de cliente (`frontend-dev`), generación de brief desde tendencia vía Claude (`ai-engineer`, en un paso separado del scan para no acoplar rate limits de Virlo y Anthropic).
